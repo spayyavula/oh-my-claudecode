@@ -3,7 +3,7 @@
  * Plugin Post-Install Setup
  *
  * Configures HUD statusline when plugin is installed.
- * This runs after `claude plugin install oh-my-claudecode@oh-my-claudecode`
+ * This runs after `claude plugin install oh-my-claude-sisyphus`
  */
 
 import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync, chmodSync } from 'node:fs';
@@ -18,7 +18,7 @@ const CLAUDE_DIR = join(homedir(), '.claude');
 const HUD_DIR = join(CLAUDE_DIR, 'hud');
 const SETTINGS_FILE = join(CLAUDE_DIR, 'settings.json');
 
-console.log('[Sisyphus] Running post-install setup...');
+console.log('[OMC] Running post-install setup...');
 
 // 1. Create HUD directory
 if (!existsSync(HUD_DIR)) {
@@ -26,10 +26,10 @@ if (!existsSync(HUD_DIR)) {
 }
 
 // 2. Create HUD wrapper script
-const hudScriptPath = join(HUD_DIR, 'sisyphus-hud.mjs');
+const hudScriptPath = join(HUD_DIR, 'omc-hud.mjs');
 const hudScript = `#!/usr/bin/env node
 /**
- * Sisyphus HUD - Statusline Script
+ * OMC HUD - Statusline Script
  * Wrapper that imports from plugin cache or development paths
  */
 
@@ -40,8 +40,8 @@ import { join } from "node:path";
 async function main() {
   const home = homedir();
 
-  // 1. Try plugin cache first (preferred for 3.0.0+)
-  const pluginCacheBase = join(home, ".claude/plugins/cache/oh-my-claudecode/oh-my-claudecode");
+  // 1. Try plugin cache first (npm package name: oh-my-claude-sisyphus)
+  const pluginCacheBase = join(home, ".claude/plugins/cache/oh-my-claude-sisyphus/oh-my-claude-sisyphus");
   if (existsSync(pluginCacheBase)) {
     try {
       const versions = readdirSync(pluginCacheBase);
@@ -56,8 +56,10 @@ async function main() {
     } catch { /* continue */ }
   }
 
-  // 2. Development paths
+  // 2. Development paths (try both old and new directory names)
   const devPaths = [
+    join(home, "Workspace/oh-my-claude-sisyphus/dist/hud/index.js"),
+    join(home, "workspace/oh-my-claude-sisyphus/dist/hud/index.js"),
     join(home, "Workspace/oh-my-claudecode/dist/hud/index.js"),
     join(home, "workspace/oh-my-claudecode/dist/hud/index.js"),
   ];
@@ -72,7 +74,7 @@ async function main() {
   }
 
   // 3. Fallback
-  console.log("[SISYPHUS] active");
+  console.log("[OMC] active");
 }
 
 main();
@@ -82,7 +84,7 @@ writeFileSync(hudScriptPath, hudScript);
 try {
   chmodSync(hudScriptPath, 0o755);
 } catch { /* Windows doesn't need this */ }
-console.log('[Sisyphus] Installed HUD wrapper script');
+console.log('[OMC] Installed HUD wrapper script');
 
 // 3. Configure settings.json
 try {
@@ -91,19 +93,22 @@ try {
     settings = JSON.parse(readFileSync(SETTINGS_FILE, 'utf-8'));
   }
 
-  // Add statusLine if not configured
-  if (!settings.statusLine) {
+  // Add statusLine if not configured or update old path
+  const needsUpdate = !settings.statusLine ||
+    (settings.statusLine.command && settings.statusLine.command.includes('sisyphus-hud.mjs'));
+
+  if (needsUpdate) {
     settings.statusLine = {
       type: 'command',
       command: `node ${hudScriptPath}`
     };
     writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2));
-    console.log('[Sisyphus] Configured HUD statusLine in settings.json');
+    console.log('[OMC] Configured HUD statusLine in settings.json');
   } else {
-    console.log('[Sisyphus] statusLine already configured, skipping');
+    console.log('[OMC] statusLine already configured, skipping');
   }
 } catch (e) {
-  console.log('[Sisyphus] Warning: Could not configure settings.json:', e.message);
+  console.log('[OMC] Warning: Could not configure settings.json:', e.message);
 }
 
-console.log('[Sisyphus] Setup complete! Restart Claude Code to activate HUD.');
+console.log('[OMC] Setup complete! Restart Claude Code to activate HUD.');

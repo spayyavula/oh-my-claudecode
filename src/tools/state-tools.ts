@@ -11,7 +11,6 @@ import {
   getWorktreeRoot,
   resolveStatePath,
   ensureOmcDir,
-  OmcPaths
 } from '../lib/worktree-paths.js';
 import { atomicWriteJsonSync } from '../lib/atomic-write.js';
 import {
@@ -126,18 +125,49 @@ export const stateReadTool: ToolDefinition<{
 
 export const stateWriteTool: ToolDefinition<{
   mode: z.ZodEnum<typeof STATE_TOOL_MODES>;
-  state: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+  active: z.ZodOptional<z.ZodBoolean>;
+  iteration: z.ZodOptional<z.ZodNumber>;
+  max_iterations: z.ZodOptional<z.ZodNumber>;
+  current_phase: z.ZodOptional<z.ZodString>;
+  task_description: z.ZodOptional<z.ZodString>;
+  plan_path: z.ZodOptional<z.ZodString>;
+  started_at: z.ZodOptional<z.ZodString>;
+  completed_at: z.ZodOptional<z.ZodString>;
+  error: z.ZodOptional<z.ZodString>;
+  state: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
   workingDirectory: z.ZodOptional<z.ZodString>;
 }> = {
   name: 'state_write',
-  description: 'Write/update state for a specific mode. Creates the state file and directories if they do not exist. Use with caution - prefer using mode-specific APIs when available. Note: swarm uses SQLite and cannot be written via this tool.',
+  description: 'Write/update state for a specific mode. Creates the state file and directories if they do not exist. Common fields (active, iteration, phase, etc.) can be set directly as parameters. Additional custom fields can be passed via the optional `state` parameter. Note: swarm uses SQLite and cannot be written via this tool.',
   schema: {
     mode: z.enum(STATE_TOOL_MODES).describe('The mode to write state for'),
-    state: z.record(z.string(), z.unknown()).describe('The state object to write (JSON)'),
+    active: z.boolean().optional().describe('Whether the mode is currently active'),
+    iteration: z.number().optional().describe('Current iteration number'),
+    max_iterations: z.number().optional().describe('Maximum iterations allowed'),
+    current_phase: z.string().optional().describe('Current execution phase'),
+    task_description: z.string().optional().describe('Description of the task being executed'),
+    plan_path: z.string().optional().describe('Path to the plan file'),
+    started_at: z.string().optional().describe('ISO timestamp when the mode started'),
+    completed_at: z.string().optional().describe('ISO timestamp when the mode completed'),
+    error: z.string().optional().describe('Error message if the mode failed'),
+    state: z.record(z.string(), z.unknown()).optional().describe('Additional custom state fields (merged with explicit parameters)'),
     workingDirectory: z.string().optional().describe('Working directory (defaults to cwd)'),
   },
   handler: async (args) => {
-    const { mode, state, workingDirectory } = args;
+    const {
+      mode,
+      active,
+      iteration,
+      max_iterations,
+      current_phase,
+      task_description,
+      plan_path,
+      started_at,
+      completed_at,
+      error,
+      state,
+      workingDirectory
+    } = args;
     const cwd = workingDirectory || process.cwd();
 
     try {
@@ -158,9 +188,32 @@ export const stateWriteTool: ToolDefinition<{
 
       const statePath = getStatePath(mode, root);
 
+      // Build state from explicit params + custom state
+      const builtState: Record<string, unknown> = {};
+
+      // Add explicit params (only if provided)
+      if (active !== undefined) builtState.active = active;
+      if (iteration !== undefined) builtState.iteration = iteration;
+      if (max_iterations !== undefined) builtState.max_iterations = max_iterations;
+      if (current_phase !== undefined) builtState.current_phase = current_phase;
+      if (task_description !== undefined) builtState.task_description = task_description;
+      if (plan_path !== undefined) builtState.plan_path = plan_path;
+      if (started_at !== undefined) builtState.started_at = started_at;
+      if (completed_at !== undefined) builtState.completed_at = completed_at;
+      if (error !== undefined) builtState.error = error;
+
+      // Merge custom state fields (explicit params take precedence)
+      if (state) {
+        for (const [key, value] of Object.entries(state)) {
+          if (!(key in builtState)) {
+            builtState[key] = value;
+          }
+        }
+      }
+
       // Add metadata
       const stateWithMeta = {
-        ...state,
+        ...builtState,
         _meta: {
           mode,
           updatedAt: new Date().toISOString(),

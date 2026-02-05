@@ -116,6 +116,12 @@ function zodTypeToJsonSchema(zodType: z.ZodTypeAny): Record<string, unknown> {
     result.enum = zodType._def?.values;
   } else if (zodType instanceof z.ZodObject) {
     return zodToJsonSchema(zodType.shape);
+  } else if (zodType instanceof z.ZodRecord) {
+    // Handle z.record() - maps to JSON object with additionalProperties
+    result.type = 'object';
+    if (zodType._def?.valueType) {
+      result.additionalProperties = zodTypeToJsonSchema(zodType._def.valueType);
+    }
   } else {
     result.type = 'string';
   }
@@ -160,8 +166,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await (tool.handler as (args: any) => Promise<{ content: Array<{ type: 'text'; text: string }> }>)(args ?? {});
+    const result = await tool.handler((args ?? {}) as unknown);
     return {
       content: result.content,
       isError: false,

@@ -9,10 +9,13 @@
  */
 
 import { spawn } from 'child_process';
-import { readFileSync, statSync } from 'fs';
-import { resolve } from 'path';
+import { readFileSync, realpathSync, statSync } from 'fs';
+import { resolve, relative, sep } from 'path';
 import { detectCodexCli } from './cli-detection.js';
 import { resolveSystemPrompt, buildPromptWithSystemContext } from './prompt-injection.js';
+import { persistPrompt, persistResponse, getExpectedResponsePath } from './prompt-persistence.js';
+import { writeJobStatus, getStatusFilePath } from './prompt-persistence.js';
+import type { JobStatus, BackgroundJobMeta } from './prompt-persistence.js';
 
 // Default model can be overridden via environment variable
 export const CODEX_DEFAULT_MODEL = process.env.OMC_CODEX_DEFAULT_MODEL || 'gpt-5.2';
@@ -125,6 +128,133 @@ export function executeCodex(prompt: string, model: string): Promise<string> {
 }
 
 /**
+ * Execute Codex CLI in background, writing status and response files upon completion
+ */
+export function executeCodexBackground(
+  fullPrompt: string,
+  model: string,
+  jobMeta: BackgroundJobMeta
+): { pid: number } | { error: string } {
+  try {
+    const args = ['exec', '-m', model, '--json', '--full-auto'];
+    const child = spawn('codex', args, {
+      detached: true,
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+
+    if (!child.pid) {
+      return { error: 'Failed to get process ID' };
+    }
+
+    const pid = child.pid;
+    child.unref();
+
+    // Write initial spawned status
+    const initialStatus: JobStatus = {
+      provider: 'codex',
+      jobId: jobMeta.jobId,
+      slug: jobMeta.slug,
+      status: 'spawned',
+      pid,
+      promptFile: jobMeta.promptFile,
+      responseFile: jobMeta.responseFile,
+      model,
+      agentRole: jobMeta.agentRole,
+      spawnedAt: new Date().toISOString(),
+    };
+    writeJobStatus(initialStatus);
+
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+
+    const timeoutHandle = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        try {
+          // Detached children are process-group leaders on POSIX.
+          if (process.platform !== 'win32') process.kill(-pid, 'SIGTERM');
+          else child.kill('SIGTERM');
+        } catch {
+          // ignore
+        }
+        writeJobStatus({
+          ...initialStatus,
+          status: 'timeout',
+          completedAt: new Date().toISOString(),
+          error: `Codex timed out after ${CODEX_TIMEOUT}ms`,
+        });
+      }
+    }, CODEX_TIMEOUT);
+
+    child.stdout?.on('data', (data: Buffer) => { stdout += data.toString(); });
+    child.stderr?.on('data', (data: Buffer) => { stderr += data.toString(); });
+
+    // Update to running after stdin write
+    child.stdin?.on('error', (err: Error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutHandle);
+      writeJobStatus({
+        ...initialStatus,
+        status: 'failed',
+        completedAt: new Date().toISOString(),
+        error: `Stdin write error: ${err.message}`,
+      });
+    });
+    child.stdin?.write(fullPrompt);
+    child.stdin?.end();
+    writeJobStatus({ ...initialStatus, status: 'running' });
+
+    child.on('close', (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutHandle);
+
+      if (code === 0 || stdout.trim()) {
+        const response = parseCodexOutput(stdout);
+        persistResponse({
+          provider: 'codex',
+          agentRole: jobMeta.agentRole,
+          model,
+          promptId: jobMeta.jobId,
+          slug: jobMeta.slug,
+          response,
+        });
+        writeJobStatus({
+          ...initialStatus,
+          status: 'completed',
+          completedAt: new Date().toISOString(),
+        });
+      } else {
+        writeJobStatus({
+          ...initialStatus,
+          status: 'failed',
+          completedAt: new Date().toISOString(),
+          error: `Codex exited with code ${code}: ${stderr || 'No output'}`,
+        });
+      }
+    });
+
+    child.on('error', (err) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutHandle);
+      writeJobStatus({
+        ...initialStatus,
+        status: 'failed',
+        completedAt: new Date().toISOString(),
+        error: `Failed to spawn Codex CLI: ${err.message}`,
+      });
+    });
+
+    return { pid };
+  } catch (err) {
+    return { error: `Failed to start background execution: ${(err as Error).message}` };
+  }
+}
+
+/**
  * Validate and read a file for context inclusion
  */
 export function validateAndReadFile(filePath: string): string {
@@ -132,22 +262,32 @@ export function validateAndReadFile(filePath: string): string {
     return `--- File: ${filePath} --- (Invalid path type)`;
   }
   try {
-    const resolved = resolve(filePath);
+    const resolvedAbs = resolve(filePath);
 
     // Security: ensure file is within working directory (worktree boundary)
     const cwd = process.cwd();
-    if (!resolved.startsWith(cwd + '/') && resolved !== cwd) {
+    const cwdReal = realpathSync(cwd);
+
+    const relAbs = relative(cwdReal, resolvedAbs);
+    if (relAbs === '' || relAbs === '..' || relAbs.startsWith('..' + sep)) {
       return `[BLOCKED] File '${filePath}' is outside the working directory. Only files within the project are allowed.`;
     }
 
-    const stats = statSync(resolved);
+    // Symlink-safe check: ensure the real path also stays inside the boundary.
+    const resolvedReal = realpathSync(resolvedAbs);
+    const relReal = relative(cwdReal, resolvedReal);
+    if (relReal === '' || relReal === '..' || relReal.startsWith('..' + sep)) {
+      return `[BLOCKED] File '${filePath}' is outside the working directory. Only files within the project are allowed.`;
+    }
+
+    const stats = statSync(resolvedReal);
     if (!stats.isFile()) {
       return `--- File: ${filePath} --- (Not a regular file)`;
     }
     if (stats.size > MAX_FILE_SIZE) {
       return `--- File: ${filePath} --- (File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB, max 5MB)`;
     }
-    return `--- File: ${filePath} ---\n${readFileSync(resolved, 'utf-8')}`;
+    return `--- File: ${filePath} ---\n${readFileSync(resolvedReal, 'utf-8')}`;
   } catch {
     return `--- File: ${filePath} --- (Error reading file)`;
   }
@@ -164,6 +304,7 @@ export async function handleAskCodex(args: {
   agent_role: string;
   model?: string;
   context_files?: string[];
+  background?: boolean;
 }): Promise<{ content: Array<{ type: 'text'; text: string }>; isError?: boolean }> {
   const { prompt, agent_role, model = CODEX_DEFAULT_MODEL, context_files } = args;
 
@@ -211,19 +352,101 @@ export async function handleAskCodex(args: {
   // Combine: system prompt > file context > user prompt
   const fullPrompt = buildPromptWithSystemContext(prompt, fileContext, resolvedSystemPrompt);
 
-  try {
-    const response = await executeCodex(fullPrompt, model);
+  // Persist prompt for audit trail
+  const promptResult = persistPrompt({
+    provider: 'codex',
+    agentRole: agent_role,
+    model,
+    files: context_files,
+    prompt,
+    fullPrompt,
+  });
+
+  // Compute expected response path for immediate return
+  const expectedResponsePath = promptResult
+    ? getExpectedResponsePath('codex', promptResult.slug, promptResult.id)
+    : undefined;
+
+  // Background mode: return immediately with job metadata
+  if (args.background) {
+    if (!promptResult) {
+      return {
+        content: [{ type: 'text' as const, text: 'Failed to persist prompt for background execution' }],
+        isError: true
+      };
+    }
+
+    const statusFilePath = getStatusFilePath('codex', promptResult.slug, promptResult.id);
+    const result = executeCodexBackground(fullPrompt, model, {
+      provider: 'codex',
+      jobId: promptResult.id,
+      slug: promptResult.slug,
+      agentRole: agent_role,
+      model,
+      promptFile: promptResult.filePath,
+      responseFile: expectedResponsePath!,
+    });
+
+    if ('error' in result) {
+      return {
+        content: [{ type: 'text' as const, text: `Failed to spawn background job: ${result.error}` }],
+        isError: true
+      };
+    }
+
     return {
       content: [{
         type: 'text' as const,
-        text: response
+        text: [
+          `**Mode:** Background (non-blocking)`,
+          `**Job ID:** ${promptResult.id}`,
+          `**Agent Role:** ${agent_role}`,
+          `**Model:** ${model}`,
+          `**PID:** ${result.pid}`,
+          `**Prompt File:** ${promptResult.filePath}`,
+          `**Response File:** ${expectedResponsePath}`,
+          `**Status File:** ${statusFilePath}`,
+          ``,
+          `Job dispatched. Check response file existence or read status file for completion.`,
+        ].join('\n')
+      }]
+    };
+  }
+
+  // Build parameter visibility block
+  const paramLines = [
+    `**Agent Role:** ${agent_role}`,
+    context_files?.length ? `**Files:** ${context_files.join(', ')}` : null,
+    promptResult ? `**Prompt File:** ${promptResult.filePath}` : null,
+    expectedResponsePath ? `**Response File:** ${expectedResponsePath}` : null,
+  ].filter(Boolean).join('\n');
+
+  try {
+    const response = await executeCodex(fullPrompt, model);
+
+    // Persist response to disk
+    if (promptResult) {
+      persistResponse({
+        provider: 'codex',
+        agentRole: agent_role,
+        model,
+        promptId: promptResult.id,
+        slug: promptResult.slug,
+        response,
+      });
+    }
+
+    return {
+      content: [{
+        type: 'text' as const,
+        text: `${paramLines}\n\n---\n\n${response}`
       }]
     };
   } catch (err) {
     return {
       content: [{
         type: 'text' as const,
-        text: `Codex CLI error: ${(err as Error).message}`
+        text: `${paramLines}\n\n---\n\nCodex CLI error: ${(err as Error).message}`
       }],
       isError: true
     };

@@ -25,16 +25,18 @@ const askGeminiTool = tool(
     files: { type: "array", items: { type: "string" }, description: "File paths for Gemini to analyze (leverages 1M token context window)" },
     prompt: { type: "string", description: "The prompt to send to Gemini" },
     model: { type: "string", description: `Gemini model to use (default: ${GEMINI_DEFAULT_MODEL}). Automatic fallback chain: ${GEMINI_MODEL_FALLBACKS.join(' → ')}` },
+    background: { type: "boolean", description: "Run in background (non-blocking). Returns immediately with job metadata and file paths. Check response file for completion." },
   } as any,
   async (args: any) => {
-    const { prompt, agent_role, model, files } = args as {
+    const { prompt, agent_role, model, files, background } = args as {
       prompt: string;
       agent_role: string;
       model?: string;
       files?: string[];
+      background?: boolean;
     };
 
-    return handleAskGemini({ prompt, agent_role, model, files });
+    return handleAskGemini({ prompt, agent_role, model, files, background });
   }
 );
 

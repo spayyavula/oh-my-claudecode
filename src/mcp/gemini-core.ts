@@ -13,10 +13,13 @@
  */
 
 import { spawn } from 'child_process';
-import { readFileSync, statSync } from 'fs';
-import { resolve } from 'path';
+import { readFileSync, realpathSync, statSync } from 'fs';
+import { resolve, relative, sep } from 'path';
 import { detectGeminiCli } from './cli-detection.js';
 import { resolveSystemPrompt, buildPromptWithSystemContext } from './prompt-injection.js';
+import { persistPrompt, persistResponse, getExpectedResponsePath } from './prompt-persistence.js';
+import { writeJobStatus, getStatusFilePath } from './prompt-persistence.js';
+import type { JobStatus, BackgroundJobMeta } from './prompt-persistence.js';
 
 // Default model can be overridden via environment variable
 export const GEMINI_DEFAULT_MODEL = process.env.OMC_GEMINI_DEFAULT_MODEL || 'gemini-3-pro-preview';
@@ -104,6 +107,133 @@ export function executeGemini(prompt: string, model?: string): Promise<string> {
 }
 
 /**
+ * Execute Gemini CLI in background (single model, no fallback chain)
+ */
+export function executeGeminiBackground(
+  fullPrompt: string,
+  model: string,
+  jobMeta: BackgroundJobMeta
+): { pid: number } | { error: string } {
+  try {
+    const args = ['--yolo'];
+    if (model) {
+      args.push('--model', model);
+    }
+    const child = spawn('gemini', args, {
+      detached: true,
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+
+    if (!child.pid) {
+      return { error: 'Failed to get process ID' };
+    }
+
+    const pid = child.pid;
+    child.unref();
+
+    const initialStatus: JobStatus = {
+      provider: 'gemini',
+      jobId: jobMeta.jobId,
+      slug: jobMeta.slug,
+      status: 'spawned',
+      pid,
+      promptFile: jobMeta.promptFile,
+      responseFile: jobMeta.responseFile,
+      model,
+      agentRole: jobMeta.agentRole,
+      spawnedAt: new Date().toISOString(),
+    };
+    writeJobStatus(initialStatus);
+
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+
+    const timeoutHandle = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        try {
+          // Detached children are process-group leaders on POSIX.
+          if (process.platform !== 'win32') process.kill(-pid, 'SIGTERM');
+          else child.kill('SIGTERM');
+        } catch {
+          // ignore
+        }
+        writeJobStatus({
+          ...initialStatus,
+          status: 'timeout',
+          completedAt: new Date().toISOString(),
+          error: `Gemini timed out after ${GEMINI_TIMEOUT}ms`,
+        });
+      }
+    }, GEMINI_TIMEOUT);
+
+    child.stdout?.on('data', (data: Buffer) => { stdout += data.toString(); });
+    child.stderr?.on('data', (data: Buffer) => { stderr += data.toString(); });
+
+    child.stdin?.on('error', (err: Error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutHandle);
+      writeJobStatus({
+        ...initialStatus,
+        status: 'failed',
+        completedAt: new Date().toISOString(),
+        error: `Stdin write error: ${err.message}`,
+      });
+    });
+    child.stdin?.write(fullPrompt);
+    child.stdin?.end();
+    writeJobStatus({ ...initialStatus, status: 'running' });
+
+    child.on('close', (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutHandle);
+
+      if (code === 0 || stdout.trim()) {
+        persistResponse({
+          provider: 'gemini',
+          agentRole: jobMeta.agentRole,
+          model,
+          promptId: jobMeta.jobId,
+          slug: jobMeta.slug,
+          response: stdout.trim(),
+        });
+        writeJobStatus({
+          ...initialStatus,
+          status: 'completed',
+          completedAt: new Date().toISOString(),
+        });
+      } else {
+        writeJobStatus({
+          ...initialStatus,
+          status: 'failed',
+          completedAt: new Date().toISOString(),
+          error: `Gemini exited with code ${code}: ${stderr || 'No output'}`,
+        });
+      }
+    });
+
+    child.on('error', (err) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutHandle);
+      writeJobStatus({
+        ...initialStatus,
+        status: 'failed',
+        completedAt: new Date().toISOString(),
+        error: `Failed to spawn Gemini CLI: ${err.message}`,
+      });
+    });
+
+    return { pid };
+  } catch (err) {
+    return { error: `Failed to start background execution: ${(err as Error).message}` };
+  }
+}
+
+/**
  * Validate and read a file for context inclusion
  */
 export function validateAndReadFile(filePath: string): string {
@@ -111,22 +241,32 @@ export function validateAndReadFile(filePath: string): string {
     return `--- File: ${filePath} --- (Invalid path type)`;
   }
   try {
-    const resolved = resolve(filePath);
+    const resolvedAbs = resolve(filePath);
 
     // Security: ensure file is within working directory (worktree boundary)
     const cwd = process.cwd();
-    if (!resolved.startsWith(cwd + '/') && resolved !== cwd) {
+    const cwdReal = realpathSync(cwd);
+
+    const relAbs = relative(cwdReal, resolvedAbs);
+    if (relAbs === '' || relAbs === '..' || relAbs.startsWith('..' + sep)) {
       return `[BLOCKED] File '${filePath}' is outside the working directory. Only files within the project are allowed.`;
     }
 
-    const stats = statSync(resolved);
+    // Symlink-safe check: ensure the real path also stays inside the boundary.
+    const resolvedReal = realpathSync(resolvedAbs);
+    const relReal = relative(cwdReal, resolvedReal);
+    if (relReal === '' || relReal === '..' || relReal.startsWith('..' + sep)) {
+      return `[BLOCKED] File '${filePath}' is outside the working directory. Only files within the project are allowed.`;
+    }
+
+    const stats = statSync(resolvedReal);
     if (!stats.isFile()) {
       return `--- File: ${filePath} --- (Not a regular file)`;
     }
     if (stats.size > MAX_FILE_SIZE) {
       return `--- File: ${filePath} --- (File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB, max 5MB)`;
     }
-    return `--- File: ${filePath} ---\n${readFileSync(resolved, 'utf-8')}`;
+    return `--- File: ${filePath} ---\n${readFileSync(resolvedReal, 'utf-8')}`;
   } catch {
     return `--- File: ${filePath} --- (Error reading file)`;
   }
@@ -152,6 +292,7 @@ export async function handleAskGemini(args: {
   agent_role: string;
   model?: string;
   files?: string[];
+  background?: boolean;
 }): Promise<{ content: Array<{ type: 'text'; text: string }>; isError?: boolean }> {
   const { prompt, agent_role, model = GEMINI_DEFAULT_MODEL, files } = args;
 
@@ -199,6 +340,83 @@ export async function handleAskGemini(args: {
   // Combine: system prompt > file context > user prompt
   const fullPrompt = buildPromptWithSystemContext(prompt, fileContext, resolvedSystemPrompt);
 
+  // Persist prompt for audit trail (once, before fallback loop)
+  const promptResult = persistPrompt({
+    provider: 'gemini',
+    agentRole: agent_role,
+    model,
+    files,
+    prompt,
+    fullPrompt,
+  });
+
+  // Compute expected response path for immediate return
+  const expectedResponsePath = promptResult
+    ? getExpectedResponsePath('gemini', promptResult.slug, promptResult.id)
+    : undefined;
+
+  // Background mode: return immediately with job metadata
+  if (args.background) {
+    if (!promptResult) {
+      return {
+        content: [{ type: 'text' as const, text: 'Failed to persist prompt for background execution' }],
+        isError: true
+      };
+    }
+
+    const statusFilePath = getStatusFilePath('gemini', promptResult.slug, promptResult.id);
+    const requestedModel = model;
+    const fallbackIndex = GEMINI_MODEL_FALLBACKS.indexOf(requestedModel);
+    const modelsToTry = fallbackIndex >= 0
+      ? GEMINI_MODEL_FALLBACKS.slice(fallbackIndex)
+      : [requestedModel, ...GEMINI_MODEL_FALLBACKS];
+
+    const result = executeGeminiBackground(fullPrompt, modelsToTry[0], {
+      provider: 'gemini',
+      jobId: promptResult.id,
+      slug: promptResult.slug,
+      agentRole: agent_role,
+      model: modelsToTry[0],
+      promptFile: promptResult.filePath,
+      responseFile: expectedResponsePath!,
+    });
+
+    if ('error' in result) {
+      return {
+        content: [{ type: 'text' as const, text: `Failed to spawn background job: ${result.error}` }],
+        isError: true
+      };
+    }
+
+    return {
+      content: [{
+        type: 'text' as const,
+        text: [
+          `**Mode:** Background (non-blocking)`,
+          `**Job ID:** ${promptResult.id}`,
+          `**Agent Role:** ${agent_role}`,
+          `**Model (attempting):** ${modelsToTry[0]}`,
+          `**Fallback chain:** ${modelsToTry.join(' -> ')}`,
+          `**PID:** ${result.pid}`,
+          `**Prompt File:** ${promptResult.filePath}`,
+          `**Response File:** ${expectedResponsePath}`,
+          `**Status File:** ${statusFilePath}`,
+          ``,
+          `Job dispatched. Background mode tries first model only.`,
+          `If it fails, check status file and retry with next model.`,
+        ].join('\n')
+      }]
+    };
+  }
+
+  // Build parameter visibility block
+  const paramLines = [
+    `**Agent Role:** ${agent_role}`,
+    files?.length ? `**Files:** ${files.join(', ')}` : null,
+    promptResult ? `**Prompt File:** ${promptResult.filePath}` : null,
+    expectedResponsePath ? `**Response File:** ${expectedResponsePath}` : null,
+  ].filter(Boolean).join('\n');
+
   // Build fallback chain: start from the requested model
   const requestedModel = model;
   const fallbackIndex = GEMINI_MODEL_FALLBACKS.indexOf(requestedModel);
@@ -211,11 +429,26 @@ export async function handleAskGemini(args: {
     try {
       const response = await executeGemini(fullPrompt, tryModel);
       const usedFallback = tryModel !== requestedModel;
-      const prefix = usedFallback ? `[Fallback: used ${tryModel} instead of ${requestedModel}]\n\n` : '';
+      const fallbackNote = usedFallback ? `[Fallback: used ${tryModel} instead of ${requestedModel}]\n\n` : '';
+
+      // Persist response to disk
+      if (promptResult) {
+        persistResponse({
+          provider: 'gemini',
+          agentRole: agent_role,
+          model: tryModel,
+          promptId: promptResult.id,
+          slug: promptResult.slug,
+          response,
+          usedFallback,
+          fallbackModel: usedFallback ? tryModel : undefined,
+        });
+      }
+
       return {
         content: [{
           type: 'text' as const,
-          text: `${prefix}${response}`
+          text: `${paramLines}\n\n---\n\n${fallbackNote}${response}`
         }]
       };
     } catch (err) {
@@ -226,7 +459,7 @@ export async function handleAskGemini(args: {
   return {
     content: [{
       type: 'text' as const,
-      text: `Gemini CLI error: all models failed.\n${errors.join('\n')}`
+      text: `${paramLines}\n\n---\n\nGemini CLI error: all models failed.\n${errors.join('\n')}`
     }],
     isError: true
   };

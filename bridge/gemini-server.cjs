@@ -2243,8 +2243,8 @@ var require_resolve = __commonJS({
       }
       return count;
     }
-    function getFullPath(resolver, id = "", normalize) {
-      if (normalize !== false)
+    function getFullPath(resolver, id = "", normalize2) {
+      if (normalize2 !== false)
         id = normalizeId(id);
       const p = resolver.parse(id);
       return _getFullPath(resolver, p);
@@ -2992,7 +2992,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve3.call(this, root, ref);
+      let _sch = resolve4.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a = root.localRefs) === null || _a === void 0 ? void 0 : _a[ref];
         const { schemaId } = this.opts;
@@ -3019,7 +3019,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve3(root, ref) {
+    function resolve4(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -3584,7 +3584,7 @@ var require_fast_uri = __commonJS({
     "use strict";
     var { normalizeIPv6, removeDotSegments, recomposeAuthority, normalizeComponentEncoding, isIPv4, nonSimpleDomain } = require_utils();
     var { SCHEMES, getSchemeHandler } = require_schemes();
-    function normalize(uri, options) {
+    function normalize2(uri, options) {
       if (typeof uri === "string") {
         uri = /** @type {T} */
         serialize(parse3(uri, options), options);
@@ -3594,55 +3594,55 @@ var require_fast_uri = __commonJS({
       }
       return uri;
     }
-    function resolve3(baseURI, relativeURI, options) {
+    function resolve4(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
       const resolved = resolveComponent(parse3(baseURI, schemelessOptions), parse3(relativeURI, schemelessOptions), schemelessOptions, true);
       schemelessOptions.skipEscape = true;
       return serialize(resolved, schemelessOptions);
     }
-    function resolveComponent(base, relative2, options, skipNormalization) {
+    function resolveComponent(base, relative4, options, skipNormalization) {
       const target = {};
       if (!skipNormalization) {
         base = parse3(serialize(base, options), options);
-        relative2 = parse3(serialize(relative2, options), options);
+        relative4 = parse3(serialize(relative4, options), options);
       }
       options = options || {};
-      if (!options.tolerant && relative2.scheme) {
-        target.scheme = relative2.scheme;
-        target.userinfo = relative2.userinfo;
-        target.host = relative2.host;
-        target.port = relative2.port;
-        target.path = removeDotSegments(relative2.path || "");
-        target.query = relative2.query;
+      if (!options.tolerant && relative4.scheme) {
+        target.scheme = relative4.scheme;
+        target.userinfo = relative4.userinfo;
+        target.host = relative4.host;
+        target.port = relative4.port;
+        target.path = removeDotSegments(relative4.path || "");
+        target.query = relative4.query;
       } else {
-        if (relative2.userinfo !== void 0 || relative2.host !== void 0 || relative2.port !== void 0) {
-          target.userinfo = relative2.userinfo;
-          target.host = relative2.host;
-          target.port = relative2.port;
-          target.path = removeDotSegments(relative2.path || "");
-          target.query = relative2.query;
+        if (relative4.userinfo !== void 0 || relative4.host !== void 0 || relative4.port !== void 0) {
+          target.userinfo = relative4.userinfo;
+          target.host = relative4.host;
+          target.port = relative4.port;
+          target.path = removeDotSegments(relative4.path || "");
+          target.query = relative4.query;
         } else {
-          if (!relative2.path) {
+          if (!relative4.path) {
             target.path = base.path;
-            if (relative2.query !== void 0) {
-              target.query = relative2.query;
+            if (relative4.query !== void 0) {
+              target.query = relative4.query;
             } else {
               target.query = base.query;
             }
           } else {
-            if (relative2.path[0] === "/") {
-              target.path = removeDotSegments(relative2.path);
+            if (relative4.path[0] === "/") {
+              target.path = removeDotSegments(relative4.path);
             } else {
               if ((base.userinfo !== void 0 || base.host !== void 0 || base.port !== void 0) && !base.path) {
-                target.path = "/" + relative2.path;
+                target.path = "/" + relative4.path;
               } else if (!base.path) {
-                target.path = relative2.path;
+                target.path = relative4.path;
               } else {
-                target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative2.path;
+                target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative4.path;
               }
               target.path = removeDotSegments(target.path);
             }
-            target.query = relative2.query;
+            target.query = relative4.query;
           }
           target.userinfo = base.userinfo;
           target.host = base.host;
@@ -3650,7 +3650,7 @@ var require_fast_uri = __commonJS({
         }
         target.scheme = base.scheme;
       }
-      target.fragment = relative2.fragment;
+      target.fragment = relative4.fragment;
       return target;
     }
     function equal(uriA, uriB, options) {
@@ -3820,8 +3820,8 @@ var require_fast_uri = __commonJS({
     }
     var fastUri = {
       SCHEMES,
-      normalize,
-      resolve: resolve3,
+      normalize: normalize2,
+      resolve: resolve4,
       resolveComponent,
       equal,
       serialize,
@@ -12610,7 +12610,7 @@ var Protocol = class {
           return;
         }
         const pollInterval = task2.pollInterval ?? this._options?.defaultTaskPollInterval ?? 1e3;
-        await new Promise((resolve3) => setTimeout(resolve3, pollInterval));
+        await new Promise((resolve4) => setTimeout(resolve4, pollInterval));
         options?.signal?.throwIfAborted();
       }
     } catch (error2) {
@@ -12627,7 +12627,7 @@ var Protocol = class {
    */
   request(request, resultSchema, options) {
     const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options ?? {};
-    return new Promise((resolve3, reject) => {
+    return new Promise((resolve4, reject) => {
       const earlyReject = (error2) => {
         reject(error2);
       };
@@ -12705,7 +12705,7 @@ var Protocol = class {
           if (!parseResult.success) {
             reject(parseResult.error);
           } else {
-            resolve3(parseResult.data);
+            resolve4(parseResult.data);
           }
         } catch (error2) {
           reject(error2);
@@ -12966,12 +12966,12 @@ var Protocol = class {
       }
     } catch {
     }
-    return new Promise((resolve3, reject) => {
+    return new Promise((resolve4, reject) => {
       if (signal.aborted) {
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
         return;
       }
-      const timeoutId = setTimeout(resolve3, interval);
+      const timeoutId = setTimeout(resolve4, interval);
       signal.addEventListener("abort", () => {
         clearTimeout(timeoutId);
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
@@ -13700,21 +13700,21 @@ var StdioServerTransport = class {
     this.onclose?.();
   }
   send(message) {
-    return new Promise((resolve3) => {
+    return new Promise((resolve4) => {
       const json = serializeMessage(message);
       if (this._stdout.write(json)) {
-        resolve3();
+        resolve4();
       } else {
-        this._stdout.once("drain", resolve3);
+        this._stdout.once("drain", resolve4);
       }
     });
   }
 };
 
 // src/mcp/gemini-core.ts
-var import_child_process2 = require("child_process");
-var import_fs2 = require("fs");
-var import_path2 = require("path");
+var import_child_process3 = require("child_process");
+var import_fs4 = require("fs");
+var import_path4 = require("path");
 
 // src/mcp/cli-detection.ts
 var import_child_process = require("child_process");
@@ -13809,6 +13809,161 @@ ${systemPrompt}
   return parts.join("\n\n");
 }
 
+// src/mcp/prompt-persistence.ts
+var import_fs3 = require("fs");
+var import_path3 = require("path");
+var import_crypto = require("crypto");
+
+// src/lib/worktree-paths.ts
+var import_child_process2 = require("child_process");
+var import_fs2 = require("fs");
+var import_path2 = require("path");
+var worktreeCache = null;
+function getWorktreeRoot(cwd) {
+  const effectiveCwd = cwd || process.cwd();
+  if (worktreeCache && worktreeCache.cwd === effectiveCwd) {
+    return worktreeCache.root;
+  }
+  try {
+    const root = (0, import_child_process2.execSync)("git rev-parse --show-toplevel", {
+      cwd: effectiveCwd,
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"]
+    }).trim();
+    worktreeCache = { cwd: effectiveCwd, root };
+    return root;
+  } catch {
+    return effectiveCwd;
+  }
+}
+
+// src/mcp/prompt-persistence.ts
+function yamlString(value) {
+  return JSON.stringify(value);
+}
+function renameOverwritingSync(fromPath, toPath) {
+  try {
+    (0, import_fs3.renameSync)(fromPath, toPath);
+    return;
+  } catch {
+  }
+  try {
+    if ((0, import_fs3.existsSync)(toPath)) {
+      (0, import_fs3.unlinkSync)(toPath);
+    }
+  } catch {
+  }
+  (0, import_fs3.renameSync)(fromPath, toPath);
+}
+function slugify(text, maxWords = 4) {
+  if (!text || typeof text !== "string") {
+    return "prompt";
+  }
+  const words = text.trim().split(/\s+/).slice(0, maxWords);
+  let slug = words.join("-").toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+  if (slug.length > 40) {
+    slug = slug.substring(0, 40).replace(/-$/, "");
+  }
+  return slug || "prompt";
+}
+function generatePromptId() {
+  return (0, import_crypto.randomBytes)(4).toString("hex");
+}
+function getPromptsDir() {
+  const root = getWorktreeRoot() || process.cwd();
+  return (0, import_path3.join)(root, ".omc", "prompts");
+}
+function buildPromptFrontmatter(options) {
+  const lines = [
+    "---",
+    `provider: ${yamlString(options.provider)}`,
+    `agent_role: ${yamlString(options.agentRole)}`,
+    `model: ${yamlString(options.model)}`
+  ];
+  if (options.files && options.files.length > 0) {
+    lines.push("files:");
+    for (const file of options.files) {
+      lines.push(`  - ${yamlString(file)}`);
+    }
+  }
+  lines.push(`timestamp: ${yamlString((/* @__PURE__ */ new Date()).toISOString())}`);
+  lines.push("---");
+  return lines.join("\n");
+}
+function buildResponseFrontmatter(options) {
+  const lines = [
+    "---",
+    `provider: ${yamlString(options.provider)}`,
+    `agent_role: ${yamlString(options.agentRole)}`,
+    `model: ${yamlString(options.model)}`,
+    `prompt_id: ${yamlString(options.promptId)}`
+  ];
+  if (options.usedFallback && options.fallbackModel) {
+    lines.push(`used_fallback: true`);
+    lines.push(`fallback_model: ${yamlString(options.fallbackModel)}`);
+  }
+  lines.push(`timestamp: ${yamlString((/* @__PURE__ */ new Date()).toISOString())}`);
+  lines.push("---");
+  return lines.join("\n");
+}
+function persistPrompt(options) {
+  try {
+    const promptsDir = getPromptsDir();
+    (0, import_fs3.mkdirSync)(promptsDir, { recursive: true });
+    const slug = slugify(options.prompt);
+    const id = generatePromptId();
+    const filename = `${options.provider}-prompt-${slug}-${id}.md`;
+    const filePath = (0, import_path3.join)(promptsDir, filename);
+    const frontmatter = buildPromptFrontmatter(options);
+    const content = `${frontmatter}
+
+${options.fullPrompt}`;
+    (0, import_fs3.writeFileSync)(filePath, content, "utf-8");
+    return { filePath, id, slug };
+  } catch (err) {
+    console.warn(`[prompt-persistence] Failed to persist prompt: ${err.message}`);
+    return void 0;
+  }
+}
+function getExpectedResponsePath(provider, slug, promptId) {
+  const promptsDir = getPromptsDir();
+  const filename = `${provider}-response-${slug}-${promptId}.md`;
+  return (0, import_path3.join)(promptsDir, filename);
+}
+function persistResponse(options) {
+  try {
+    const promptsDir = getPromptsDir();
+    (0, import_fs3.mkdirSync)(promptsDir, { recursive: true });
+    const filename = `${options.provider}-response-${options.slug}-${options.promptId}.md`;
+    const filePath = (0, import_path3.join)(promptsDir, filename);
+    const frontmatter = buildResponseFrontmatter(options);
+    const content = `${frontmatter}
+
+${options.response}`;
+    (0, import_fs3.writeFileSync)(filePath, content, "utf-8");
+    return filePath;
+  } catch (err) {
+    console.warn(`[prompt-persistence] Failed to persist response: ${err.message}`);
+    return void 0;
+  }
+}
+function getStatusFilePath(provider, slug, promptId) {
+  const promptsDir = getPromptsDir();
+  return (0, import_path3.join)(promptsDir, `${provider}-status-${slug}-${promptId}.json`);
+}
+function writeJobStatus(status) {
+  try {
+    const promptsDir = getPromptsDir();
+    (0, import_fs3.mkdirSync)(promptsDir, { recursive: true });
+    const statusPath = getStatusFilePath(status.provider, status.slug, status.jobId);
+    const tempPath = statusPath + ".tmp";
+    (0, import_fs3.writeFileSync)(tempPath, JSON.stringify(status, null, 2), "utf-8");
+    renameOverwritingSync(tempPath, statusPath);
+  } catch (err) {
+    console.warn(`[prompt-persistence] Failed to write job status: ${err.message}`);
+  }
+}
+
 // src/mcp/gemini-core.ts
 var GEMINI_DEFAULT_MODEL = process.env.OMC_GEMINI_DEFAULT_MODEL || "gemini-3-pro-preview";
 var GEMINI_TIMEOUT = Math.min(Math.max(5e3, parseInt(process.env.OMC_GEMINI_TIMEOUT || "3600000", 10) || 36e5), 36e5);
@@ -13822,13 +13977,13 @@ var GEMINI_VALID_ROLES = ["designer", "writer", "vision"];
 var MAX_CONTEXT_FILES = 20;
 var MAX_FILE_SIZE = 5 * 1024 * 1024;
 function executeGemini(prompt, model) {
-  return new Promise((resolve3, reject) => {
+  return new Promise((resolve4, reject) => {
     let settled = false;
     const args = ["--yolo"];
     if (model) {
       args.push("--model", model);
     }
-    const child = (0, import_child_process2.spawn)("gemini", args, {
+    const child = (0, import_child_process3.spawn)("gemini", args, {
       stdio: ["pipe", "pipe", "pipe"]
     });
     const timeoutHandle = setTimeout(() => {
@@ -13851,7 +14006,7 @@ function executeGemini(prompt, model) {
         settled = true;
         clearTimeout(timeoutHandle);
         if (code === 0 || stdout.trim()) {
-          resolve3(stdout.trim());
+          resolve4(stdout.trim());
         } else {
           reject(new Error(`Gemini exited with code ${code}: ${stderr || "No output"}`));
         }
@@ -13877,17 +14032,134 @@ function executeGemini(prompt, model) {
     child.stdin.end();
   });
 }
+function executeGeminiBackground(fullPrompt, model, jobMeta) {
+  try {
+    const args = ["--yolo"];
+    if (model) {
+      args.push("--model", model);
+    }
+    const child = (0, import_child_process3.spawn)("gemini", args, {
+      detached: true,
+      stdio: ["pipe", "pipe", "pipe"]
+    });
+    if (!child.pid) {
+      return { error: "Failed to get process ID" };
+    }
+    const pid = child.pid;
+    child.unref();
+    const initialStatus = {
+      provider: "gemini",
+      jobId: jobMeta.jobId,
+      slug: jobMeta.slug,
+      status: "spawned",
+      pid,
+      promptFile: jobMeta.promptFile,
+      responseFile: jobMeta.responseFile,
+      model,
+      agentRole: jobMeta.agentRole,
+      spawnedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    writeJobStatus(initialStatus);
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    const timeoutHandle = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        try {
+          if (process.platform !== "win32") process.kill(-pid, "SIGTERM");
+          else child.kill("SIGTERM");
+        } catch {
+        }
+        writeJobStatus({
+          ...initialStatus,
+          status: "timeout",
+          completedAt: (/* @__PURE__ */ new Date()).toISOString(),
+          error: `Gemini timed out after ${GEMINI_TIMEOUT}ms`
+        });
+      }
+    }, GEMINI_TIMEOUT);
+    child.stdout?.on("data", (data) => {
+      stdout += data.toString();
+    });
+    child.stderr?.on("data", (data) => {
+      stderr += data.toString();
+    });
+    child.stdin?.on("error", (err) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutHandle);
+      writeJobStatus({
+        ...initialStatus,
+        status: "failed",
+        completedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        error: `Stdin write error: ${err.message}`
+      });
+    });
+    child.stdin?.write(fullPrompt);
+    child.stdin?.end();
+    writeJobStatus({ ...initialStatus, status: "running" });
+    child.on("close", (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutHandle);
+      if (code === 0 || stdout.trim()) {
+        persistResponse({
+          provider: "gemini",
+          agentRole: jobMeta.agentRole,
+          model,
+          promptId: jobMeta.jobId,
+          slug: jobMeta.slug,
+          response: stdout.trim()
+        });
+        writeJobStatus({
+          ...initialStatus,
+          status: "completed",
+          completedAt: (/* @__PURE__ */ new Date()).toISOString()
+        });
+      } else {
+        writeJobStatus({
+          ...initialStatus,
+          status: "failed",
+          completedAt: (/* @__PURE__ */ new Date()).toISOString(),
+          error: `Gemini exited with code ${code}: ${stderr || "No output"}`
+        });
+      }
+    });
+    child.on("error", (err) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutHandle);
+      writeJobStatus({
+        ...initialStatus,
+        status: "failed",
+        completedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        error: `Failed to spawn Gemini CLI: ${err.message}`
+      });
+    });
+    return { pid };
+  } catch (err) {
+    return { error: `Failed to start background execution: ${err.message}` };
+  }
+}
 function validateAndReadFile(filePath) {
   if (typeof filePath !== "string") {
     return `--- File: ${filePath} --- (Invalid path type)`;
   }
   try {
-    const resolved = (0, import_path2.resolve)(filePath);
+    const resolvedAbs = (0, import_path4.resolve)(filePath);
     const cwd = process.cwd();
-    if (!resolved.startsWith(cwd + "/") && resolved !== cwd) {
+    const cwdReal = (0, import_fs4.realpathSync)(cwd);
+    const relAbs = (0, import_path4.relative)(cwdReal, resolvedAbs);
+    if (relAbs === "" || relAbs === ".." || relAbs.startsWith(".." + import_path4.sep)) {
       return `[BLOCKED] File '${filePath}' is outside the working directory. Only files within the project are allowed.`;
     }
-    const stats = (0, import_fs2.statSync)(resolved);
+    const resolvedReal = (0, import_fs4.realpathSync)(resolvedAbs);
+    const relReal = (0, import_path4.relative)(cwdReal, resolvedReal);
+    if (relReal === "" || relReal === ".." || relReal.startsWith(".." + import_path4.sep)) {
+      return `[BLOCKED] File '${filePath}' is outside the working directory. Only files within the project are allowed.`;
+    }
+    const stats = (0, import_fs4.statSync)(resolvedReal);
     if (!stats.isFile()) {
       return `--- File: ${filePath} --- (Not a regular file)`;
     }
@@ -13895,7 +14167,7 @@ function validateAndReadFile(filePath) {
       return `--- File: ${filePath} --- (File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB, max 5MB)`;
     }
     return `--- File: ${filePath} ---
-${(0, import_fs2.readFileSync)(resolved, "utf-8")}`;
+${(0, import_fs4.readFileSync)(resolvedReal, "utf-8")}`;
   } catch {
     return `--- File: ${filePath} --- (Error reading file)`;
   }
@@ -13938,6 +14210,67 @@ ${detection.installHint}`
     fileContext = files.map((f) => validateAndReadFile(f)).join("\n\n");
   }
   const fullPrompt = buildPromptWithSystemContext(prompt, fileContext, resolvedSystemPrompt);
+  const promptResult = persistPrompt({
+    provider: "gemini",
+    agentRole: agent_role,
+    model,
+    files,
+    prompt,
+    fullPrompt
+  });
+  const expectedResponsePath = promptResult ? getExpectedResponsePath("gemini", promptResult.slug, promptResult.id) : void 0;
+  if (args.background) {
+    if (!promptResult) {
+      return {
+        content: [{ type: "text", text: "Failed to persist prompt for background execution" }],
+        isError: true
+      };
+    }
+    const statusFilePath = getStatusFilePath("gemini", promptResult.slug, promptResult.id);
+    const requestedModel2 = model;
+    const fallbackIndex2 = GEMINI_MODEL_FALLBACKS.indexOf(requestedModel2);
+    const modelsToTry2 = fallbackIndex2 >= 0 ? GEMINI_MODEL_FALLBACKS.slice(fallbackIndex2) : [requestedModel2, ...GEMINI_MODEL_FALLBACKS];
+    const result = executeGeminiBackground(fullPrompt, modelsToTry2[0], {
+      provider: "gemini",
+      jobId: promptResult.id,
+      slug: promptResult.slug,
+      agentRole: agent_role,
+      model: modelsToTry2[0],
+      promptFile: promptResult.filePath,
+      responseFile: expectedResponsePath
+    });
+    if ("error" in result) {
+      return {
+        content: [{ type: "text", text: `Failed to spawn background job: ${result.error}` }],
+        isError: true
+      };
+    }
+    return {
+      content: [{
+        type: "text",
+        text: [
+          `**Mode:** Background (non-blocking)`,
+          `**Job ID:** ${promptResult.id}`,
+          `**Agent Role:** ${agent_role}`,
+          `**Model (attempting):** ${modelsToTry2[0]}`,
+          `**Fallback chain:** ${modelsToTry2.join(" -> ")}`,
+          `**PID:** ${result.pid}`,
+          `**Prompt File:** ${promptResult.filePath}`,
+          `**Response File:** ${expectedResponsePath}`,
+          `**Status File:** ${statusFilePath}`,
+          ``,
+          `Job dispatched. Background mode tries first model only.`,
+          `If it fails, check status file and retry with next model.`
+        ].join("\n")
+      }]
+    };
+  }
+  const paramLines = [
+    `**Agent Role:** ${agent_role}`,
+    files?.length ? `**Files:** ${files.join(", ")}` : null,
+    promptResult ? `**Prompt File:** ${promptResult.filePath}` : null,
+    expectedResponsePath ? `**Response File:** ${expectedResponsePath}` : null
+  ].filter(Boolean).join("\n");
   const requestedModel = model;
   const fallbackIndex = GEMINI_MODEL_FALLBACKS.indexOf(requestedModel);
   const modelsToTry = fallbackIndex >= 0 ? GEMINI_MODEL_FALLBACKS.slice(fallbackIndex) : [requestedModel, ...GEMINI_MODEL_FALLBACKS];
@@ -13946,13 +14279,29 @@ ${detection.installHint}`
     try {
       const response = await executeGemini(fullPrompt, tryModel);
       const usedFallback = tryModel !== requestedModel;
-      const prefix = usedFallback ? `[Fallback: used ${tryModel} instead of ${requestedModel}]
+      const fallbackNote = usedFallback ? `[Fallback: used ${tryModel} instead of ${requestedModel}]
 
 ` : "";
+      if (promptResult) {
+        persistResponse({
+          provider: "gemini",
+          agentRole: agent_role,
+          model: tryModel,
+          promptId: promptResult.id,
+          slug: promptResult.slug,
+          response,
+          usedFallback,
+          fallbackModel: usedFallback ? tryModel : void 0
+        });
+      }
       return {
         content: [{
           type: "text",
-          text: `${prefix}${response}`
+          text: `${paramLines}
+
+---
+
+${fallbackNote}${response}`
         }]
       };
     } catch (err) {
@@ -13962,7 +14311,11 @@ ${detection.installHint}`
   return {
     content: [{
       type: "text",
-      text: `Gemini CLI error: all models failed.
+      text: `${paramLines}
+
+---
+
+Gemini CLI error: all models failed.
 ${errors.join("\n")}`
     }],
     isError: true
@@ -13983,7 +14336,8 @@ var askGeminiTool = {
       },
       files: { type: "array", items: { type: "string" }, description: "File paths to include as context (contents will be prepended to prompt)" },
       prompt: { type: "string", description: "The prompt to send to Gemini" },
-      model: { type: "string", description: `Gemini model to use (default: ${GEMINI_DEFAULT_MODEL}). Set OMC_GEMINI_DEFAULT_MODEL env var to change default. Auto-fallback chain: ${GEMINI_MODEL_FALLBACKS.join(" \u2192 ")}.` }
+      model: { type: "string", description: `Gemini model to use (default: ${GEMINI_DEFAULT_MODEL}). Set OMC_GEMINI_DEFAULT_MODEL env var to change default. Auto-fallback chain: ${GEMINI_MODEL_FALLBACKS.join(" \u2192 ")}.` },
+      background: { type: "boolean", description: "Run in background (non-blocking). Returns immediately with job metadata and file paths. Check response file for completion." }
     },
     required: ["prompt", "agent_role"]
   }
@@ -14000,8 +14354,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (name !== "ask_gemini") {
     return { content: [{ type: "text", text: `Unknown tool: ${name}` }], isError: true };
   }
-  const { prompt, agent_role, model, files } = args ?? {};
-  return handleAskGemini({ prompt, agent_role, model, files });
+  const { prompt, agent_role, model, files, background } = args ?? {};
+  return handleAskGemini({ prompt, agent_role, model, files, background });
 });
 async function main() {
   const transport = new StdioServerTransport();

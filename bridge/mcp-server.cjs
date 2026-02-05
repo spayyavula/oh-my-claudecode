@@ -21302,14 +21302,36 @@ ${JSON.stringify(state, null, 2)}
 };
 var stateWriteTool = {
   name: "state_write",
-  description: "Write/update state for a specific mode. Creates the state file and directories if they do not exist. Use with caution - prefer using mode-specific APIs when available. Note: swarm uses SQLite and cannot be written via this tool.",
+  description: "Write/update state for a specific mode. Creates the state file and directories if they do not exist. Common fields (active, iteration, phase, etc.) can be set directly as parameters. Additional custom fields can be passed via the optional `state` parameter. Note: swarm uses SQLite and cannot be written via this tool.",
   schema: {
     mode: external_exports.enum(STATE_TOOL_MODES).describe("The mode to write state for"),
-    state: external_exports.record(external_exports.string(), external_exports.unknown()).describe("The state object to write (JSON)"),
+    active: external_exports.boolean().optional().describe("Whether the mode is currently active"),
+    iteration: external_exports.number().optional().describe("Current iteration number"),
+    max_iterations: external_exports.number().optional().describe("Maximum iterations allowed"),
+    current_phase: external_exports.string().optional().describe("Current execution phase"),
+    task_description: external_exports.string().optional().describe("Description of the task being executed"),
+    plan_path: external_exports.string().optional().describe("Path to the plan file"),
+    started_at: external_exports.string().optional().describe("ISO timestamp when the mode started"),
+    completed_at: external_exports.string().optional().describe("ISO timestamp when the mode completed"),
+    error: external_exports.string().optional().describe("Error message if the mode failed"),
+    state: external_exports.record(external_exports.string(), external_exports.unknown()).optional().describe("Additional custom state fields (merged with explicit parameters)"),
     workingDirectory: external_exports.string().optional().describe("Working directory (defaults to cwd)")
   },
   handler: async (args) => {
-    const { mode, state, workingDirectory } = args;
+    const {
+      mode,
+      active,
+      iteration,
+      max_iterations,
+      current_phase,
+      task_description,
+      plan_path,
+      started_at,
+      completed_at,
+      error: error2,
+      state,
+      workingDirectory
+    } = args;
     const cwd = workingDirectory || process.cwd();
     try {
       const root = getWorktreeRoot(cwd) || cwd;
@@ -21323,8 +21345,25 @@ var stateWriteTool = {
       }
       ensureOmcDir("state", root);
       const statePath = getStatePath(mode, root);
+      const builtState = {};
+      if (active !== void 0) builtState.active = active;
+      if (iteration !== void 0) builtState.iteration = iteration;
+      if (max_iterations !== void 0) builtState.max_iterations = max_iterations;
+      if (current_phase !== void 0) builtState.current_phase = current_phase;
+      if (task_description !== void 0) builtState.task_description = task_description;
+      if (plan_path !== void 0) builtState.plan_path = plan_path;
+      if (started_at !== void 0) builtState.started_at = started_at;
+      if (completed_at !== void 0) builtState.completed_at = completed_at;
+      if (error2 !== void 0) builtState.error = error2;
+      if (state) {
+        for (const [key, value] of Object.entries(state)) {
+          if (!(key in builtState)) {
+            builtState[key] = value;
+          }
+        }
+      }
       const stateWithMeta = {
-        ...state,
+        ...builtState,
         _meta: {
           mode,
           updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
@@ -21343,11 +21382,11 @@ ${JSON.stringify(stateWithMeta, null, 2)}
 \`\`\``
         }]
       };
-    } catch (error2) {
+    } catch (error3) {
       return {
         content: [{
           type: "text",
-          text: `Error writing state for ${mode}: ${error2 instanceof Error ? error2.message : String(error2)}`
+          text: `Error writing state for ${mode}: ${error3 instanceof Error ? error3.message : String(error3)}`
         }]
       };
     }
@@ -22570,6 +22609,11 @@ function zodTypeToJsonSchema(zodType) {
     result.enum = zodType._def?.values;
   } else if (zodType instanceof external_exports.ZodObject) {
     return zodToJsonSchema2(zodType.shape);
+  } else if (zodType instanceof external_exports.ZodRecord) {
+    result.type = "object";
+    if (zodType._def?.valueType) {
+      result.additionalProperties = zodTypeToJsonSchema(zodType._def.valueType);
+    }
   } else {
     result.type = "string";
   }

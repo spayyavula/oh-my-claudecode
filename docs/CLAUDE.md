@@ -249,6 +249,12 @@ When you detect trigger patterns above, you MUST invoke the corresponding skill 
 3. Never blindly adopt external output — critically evaluate
 4. Never block on unavailable tools — graceful fallback is mandatory
 
+**Execution notes:**
+- Codex/Gemini calls can take up to **1 hour** (complex analysis)
+- These tools are **blocking** — they hold the turn until complete
+- For parallel work, delegate to agents via Task tool with `run_in_background: true`
+- Agents calling Codex/Gemini should be spawned in background when orchestrator needs to continue other work
+
 ### OMC State Tools
 
 All state stored at `{worktree}/.omc/state/{mode}-state.json`. Never in `~/.claude/`.

@@ -20,7 +20,7 @@ import { resolveSystemPrompt, buildPromptWithSystemContext } from './prompt-inje
 
 // Default model can be overridden via environment variable
 export const GEMINI_DEFAULT_MODEL = process.env.OMC_GEMINI_DEFAULT_MODEL || 'gemini-3-pro-preview';
-export const GEMINI_TIMEOUT = Math.min(Math.max(5000, parseInt(process.env.OMC_GEMINI_TIMEOUT || '120000', 10) || 120000), 300000);
+export const GEMINI_TIMEOUT = Math.min(Math.max(5000, parseInt(process.env.OMC_GEMINI_TIMEOUT || '3600000', 10) || 3600000), 3600000);
 
 // Model fallback chain: try each in order if previous fails
 export const GEMINI_MODEL_FALLBACKS = [

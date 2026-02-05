@@ -13810,7 +13810,7 @@ ${systemPrompt}
 
 // src/mcp/gemini-core.ts
 var GEMINI_DEFAULT_MODEL = process.env.OMC_GEMINI_DEFAULT_MODEL || "gemini-3-pro-preview";
-var GEMINI_TIMEOUT = Math.min(Math.max(5e3, parseInt(process.env.OMC_GEMINI_TIMEOUT || "120000", 10) || 12e4), 3e5);
+var GEMINI_TIMEOUT = Math.min(Math.max(5e3, parseInt(process.env.OMC_GEMINI_TIMEOUT || "3600000", 10) || 36e5), 36e5);
 var GEMINI_MODEL_FALLBACKS = [
   "gemini-3-pro-preview",
   "gemini-3-flash-preview",

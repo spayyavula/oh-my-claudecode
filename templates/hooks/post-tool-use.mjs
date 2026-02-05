@@ -111,7 +111,12 @@ async function main() {
     const directory = data.directory || process.cwd();
 
     // Only process Task tool output
-    if (toolName !== 'Task' && toolName !== 'task') {
+    if (
+      toolName !== 'Task' &&
+      toolName !== 'task' &&
+      toolName !== 'TaskCreate' &&
+      toolName !== 'TaskUpdate'
+    ) {
       console.log(JSON.stringify({ continue: true }));
       return;
     }

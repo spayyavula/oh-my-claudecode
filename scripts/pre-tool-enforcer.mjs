@@ -125,7 +125,7 @@ async function main() {
     const todoStatus = getTodoStatus(directory);
 
     let message;
-    if (toolName === 'Task') {
+    if (toolName === 'Task' || toolName === 'TaskCreate' || toolName === 'TaskUpdate') {
       let toolInput = null;
       try {
         toolInput = JSON.parse(input).toolInput;

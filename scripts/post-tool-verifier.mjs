@@ -241,7 +241,9 @@ function generateMessage(toolName, toolOutput, sessionId, toolCount, directory) 
       }
       break;
 
-    case 'Task': {
+    case 'Task':
+    case 'TaskCreate':
+    case 'TaskUpdate': {
       const agentSummary = getAgentCompletionSummary(directory);
       if (detectWriteFailure(toolOutput)) {
         message = 'Task delegation failed. Verify agent name and parameters.';
@@ -325,7 +327,12 @@ async function main() {
     }
 
     // Process <remember> tags from Task agent output
-    if (toolName === 'Task' || toolName === 'task') {
+    if (
+      toolName === 'Task' ||
+      toolName === 'task' ||
+      toolName === 'TaskCreate' ||
+      toolName === 'TaskUpdate'
+    ) {
       processRememberTags(toolOutput, directory);
     }
 

@@ -14236,12 +14236,12 @@ function validateAndReadFile(filePath, baseDir) {
     const cwd = baseDir || process.cwd();
     const cwdReal = (0, import_fs4.realpathSync)(cwd);
     const relAbs = (0, import_path4.relative)(cwdReal, resolvedAbs);
-    if (relAbs === "" || relAbs === ".." || relAbs.startsWith(".." + import_path4.sep)) {
+    if (relAbs === ".." || relAbs.startsWith(".." + import_path4.sep) || (0, import_path4.isAbsolute)(relAbs)) {
       return `[BLOCKED] File '${filePath}' is outside the working directory. Only files within the project are allowed.`;
     }
     const resolvedReal = (0, import_fs4.realpathSync)(resolvedAbs);
     const relReal = (0, import_path4.relative)(cwdReal, resolvedReal);
-    if (relReal === "" || relReal === ".." || relReal.startsWith(".." + import_path4.sep)) {
+    if (relReal === ".." || relReal.startsWith(".." + import_path4.sep) || (0, import_path4.isAbsolute)(relReal)) {
       return `[BLOCKED] File '${filePath}' is outside the working directory. Only files within the project are allowed.`;
     }
     const stats = (0, import_fs4.statSync)(resolvedReal);
@@ -14314,7 +14314,7 @@ async function handleAskGemini(args) {
   const resolvedPath = (0, import_path4.resolve)(baseDir, args.prompt_file);
   const cwdReal = (0, import_fs4.realpathSync)(baseDir);
   const relPath = (0, import_path4.relative)(cwdReal, resolvedPath);
-  if (relPath === "" || relPath === ".." || relPath.startsWith(".." + import_path4.sep)) {
+  if (relPath === ".." || relPath.startsWith(".." + import_path4.sep) || (0, import_path4.isAbsolute)(relPath)) {
     return {
       content: [{ type: "text", text: `prompt_file '${args.prompt_file}' is outside the working directory.` }],
       isError: true
@@ -14330,7 +14330,7 @@ async function handleAskGemini(args) {
     };
   }
   const relReal = (0, import_path4.relative)(cwdReal, resolvedReal);
-  if (relReal === "" || relReal === ".." || relReal.startsWith(".." + import_path4.sep)) {
+  if (relReal === ".." || relReal.startsWith(".." + import_path4.sep) || (0, import_path4.isAbsolute)(relReal)) {
     return {
       content: [{ type: "text", text: `prompt_file '${args.prompt_file}' resolves to a path outside the working directory.` }],
       isError: true

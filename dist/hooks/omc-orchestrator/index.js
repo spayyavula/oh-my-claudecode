@@ -70,8 +70,9 @@ function getEnforcementLevel(directory) {
 export function isAllowedPath(filePath, directory) {
     if (!filePath)
         return true;
-    // Normalize to collapse .. and resolve . segments, then forward-slash
-    const normalized = toForwardSlash(path.normalize(filePath));
+    // Convert backslashes first (so path.normalize resolves .. on all platforms),
+    // then normalize to collapse .. segments, then ensure forward slashes.
+    const normalized = toForwardSlash(path.normalize(toForwardSlash(filePath)));
     // Reject explicit traversal that escapes (e.g. "../foo")
     if (normalized.startsWith('../') || normalized === '..')
         return false;

@@ -456,14 +456,14 @@ export function validateAndReadFile(filePath: string, baseDir?: string): string 
     const cwdReal = realpathSync(workingDir);
 
     const relAbs = relative(cwdReal, resolvedAbs);
-    if (relAbs === '' || relAbs === '..' || relAbs.startsWith('..' + sep)) {
+    if (relAbs === '..' || relAbs.startsWith('..' + sep) || isAbsolute(relAbs)) {
       return `[BLOCKED] File '${filePath}' is outside the working directory. Only files within the project are allowed.`;
     }
 
     // Symlink-safe check: ensure the real path also stays inside the boundary.
     const resolvedReal = realpathSync(resolvedAbs);
     const relReal = relative(cwdReal, resolvedReal);
-    if (relReal === '' || relReal === '..' || relReal.startsWith('..' + sep)) {
+    if (relReal === '..' || relReal.startsWith('..' + sep) || isAbsolute(relReal)) {
       return `[BLOCKED] File '${filePath}' is outside the working directory. Only files within the project are allowed.`;
     }
 
@@ -567,7 +567,7 @@ export async function handleAskCodex(args: {
   const resolvedPath = resolve(baseDir, args.prompt_file);
   const cwdReal = realpathSync(baseDir);
   const relPath = relative(cwdReal, resolvedPath);
-  if (relPath === '' || relPath === '..' || relPath.startsWith('..' + sep)) {
+  if (relPath === '..' || relPath.startsWith('..' + sep) || isAbsolute(relPath)) {
     return {
       content: [{ type: 'text' as const, text: `prompt_file '${args.prompt_file}' is outside the working directory.` }],
       isError: true
@@ -584,7 +584,7 @@ export async function handleAskCodex(args: {
     };
   }
   const relReal = relative(cwdReal, resolvedReal);
-  if (relReal === '' || relReal === '..' || relReal.startsWith('..' + sep)) {
+  if (relReal === '..' || relReal.startsWith('..' + sep) || isAbsolute(relReal)) {
     return {
       content: [{ type: 'text' as const, text: `prompt_file '${args.prompt_file}' resolves to a path outside the working directory.` }],
       isError: true
@@ -771,7 +771,7 @@ ${resolvedPrompt}`;
         // CLI didn't write the file, write parsed response ourselves
         const outputPath = resolvedOutputPath;
         const relOutput = relative(trustedRootReal, outputPath);
-        if (relOutput === '' || relOutput.startsWith('..') || isAbsolute(relOutput)) {
+        if (relOutput.startsWith('..') || isAbsolute(relOutput)) {
           console.warn(`[codex-core] output_file '${args.output_file}' resolves outside trusted root, skipping write.`);
         } else {
           try {

@@ -38,14 +38,8 @@ const SOURCE_EXTENSIONS = new Set([
 
 function isAllowedPath(filePath) {
   if (!filePath) return true;
-  // Normalize backslashes for Windows compatibility, then collapse .. traversal
-  const slashed = filePath.replace(/\\/g, '/');
-  const parts = slashed.split('/').reduce((acc, part) => {
-    if (part === '..') acc.pop();
-    else if (part !== '.' && part !== '') acc.push(part);
-    return acc;
-  }, []);
-  const clean = parts.join('/');
+  // Normalize path: convert backslashes, resolve . and .. segments, ensure forward slashes
+  const clean = path.normalize(filePath.replace(/\\/g, '/')).replace(/\\/g, '/');
   if (clean.startsWith('../') || clean === '..') return false;
   return ALLOWED_PATH_PATTERNS.some(pattern => pattern.test(clean));
 }

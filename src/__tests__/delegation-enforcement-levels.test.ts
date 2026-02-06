@@ -624,6 +624,23 @@ describe('delegation-enforcement-levels', () => {
     it('rejects foo/.omc/bar.ts as relative path', () => {
       expect(isAllowedPath('foo/.omc/bar.ts')).toBe(false);
     });
+
+    // Windows mixed-separator edge cases
+    it('rejects mixed separator traversal .omc\\..\\..\\secret', () => {
+      expect(isAllowedPath('.omc\\..\\..\\secret')).toBe(false);
+    });
+
+    it('rejects double-dot with mixed separators .omc/..\\src', () => {
+      expect(isAllowedPath('.omc/..\\src')).toBe(false);
+    });
+
+    it('rejects UNC paths as not relative to project', () => {
+      expect(isAllowedPath('\\\\server\\share\\.omc\\file')).toBe(false);
+    });
+
+    it('rejects absolute Windows drive paths without worktree root', () => {
+      expect(isAllowedPath('C:\\repo\\.omc\\file')).toBe(false);
+    });
   });
 
   describe('isSourceFile', () => {

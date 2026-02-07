@@ -27,7 +27,7 @@ Work directly when delegation adds overhead:
 
 For substantive code changes, route implementation to `executor` (or `deep-executor` for complex autonomous execution). This keeps editing workflows consistent and easier to verify.
 
-Before implementing with any SDK/API/framework, delegate to `dependency-expert` to fetch official docs first. Use Context7 MCP tools (`resolve-library-id` then `query-docs`) when available. This prevents guessing field names or API contracts.
+For non-trivial or uncertain SDK/API/framework usage, delegate to `dependency-expert` to fetch official docs first. Use Context7 MCP tools (`resolve-library-id` then `query-docs`) when available. This prevents guessing field names or API contracts. For well-known, stable APIs you can proceed directly.
 </delegation_rules>
 
 <model_routing>
@@ -92,6 +92,8 @@ Product Lane:
 Coordination:
 - `critic` (opus): plan/design critical challenge
 - `vision` (sonnet): image/screenshot/diagram analysis
+
+Deprecated aliases (backward compatibility): `researcher` -> `dependency-expert`, `tdd-guide` -> `test-engineer`.
 </agent_catalog>
 
 ---
@@ -117,11 +119,18 @@ Always attach `context_files` when calling MCP tools. MCP output is advisory -- 
 Background pattern: spawn with `background: true`, check with `check_job_status`, await with `wait_for_job` (up to 1 hour).
 
 Agents that have no MCP replacement (they need Claude's tool access): `executor`, `deep-executor`, `explore`, `debugger`, `verifier`, `dependency-expert`, `scientist`, `build-fixer`, `qa-tester`, `git-master`, all review-lane agents, all product-lane agents.
+
+Precedence: for documentation lookup, try MCP tools first (faster/cheaper). For synthesis, evaluation, or implementation guidance on external packages, use `dependency-expert`.
 </mcp_routing>
 
 ---
 
 <tools>
+External AI (MCP providers):
+- Codex: `mcp__x__ask_codex` with `agent_role` (architect/planner/critic/analyst/code-reviewer/security-reviewer/tdd-guide)
+- Gemini: `mcp__g__ask_gemini` with `agent_role` (designer/writer/vision)
+- Job management: `check_job_status`, `wait_for_job`, `kill_job`, `list_jobs` (per provider)
+
 OMC State:
 - `state_read`, `state_write`, `state_clear`, `state_list_active`, `state_get_status`
 - State stored at `{worktree}/.omc/state/{mode}-state.json` (not in `~/.claude/`)

@@ -126,19 +126,21 @@ export function getGlobalStateFilePath(mode) {
  */
 function isJsonModeActive(cwd, mode, sessionId) {
     const config = MODE_CONFIGS[mode];
-    const sessionStateFile = sessionId && !config.isSqlite
-        ? resolveSessionStatePath(mode, sessionId, cwd)
-        : null;
-    const stateFile = sessionStateFile ?? getStateFilePath(cwd, mode);
-    // Session fallback: if session-scoped state is missing, check legacy shared path
-    if (sessionStateFile && !existsSync(sessionStateFile)) {
-        const legacyStateFile = getStateFilePath(cwd, mode);
-        if (!existsSync(legacyStateFile)) {
+    // When sessionId is provided, ONLY check session-scoped path — no legacy fallback.
+    // This prevents cross-session state leakage where one session's legacy file
+    // could cause another session to see mode as active.
+    if (sessionId && !config.isSqlite) {
+        const sessionStateFile = resolveSessionStatePath(mode, sessionId, cwd);
+        if (!existsSync(sessionStateFile)) {
             return false;
         }
         try {
-            const content = readFileSync(legacyStateFile, 'utf-8');
+            const content = readFileSync(sessionStateFile, 'utf-8');
             const state = JSON.parse(content);
+            // Validate session identity: state must belong to this session
+            if (state.session_id && state.session_id !== sessionId) {
+                return false;
+            }
             if (config.activeProperty) {
                 return state[config.activeProperty] === true;
             }
@@ -148,6 +150,8 @@ function isJsonModeActive(cwd, mode, sessionId) {
             return false;
         }
     }
+    // No sessionId: check legacy shared path (backward compat)
+    const stateFile = getStateFilePath(cwd, mode);
     if (!existsSync(stateFile)) {
         return false;
     }
@@ -218,9 +222,10 @@ export function isModeActive(mode, cwd, sessionId) {
 }
 /**
  * Check if a mode has active state (file exists)
+ * @param sessionId - When provided, checks session-scoped path only (no legacy fallback)
  */
-export function hasModeState(cwd, mode) {
-    const stateFile = getStateFilePath(cwd, mode);
+export function hasModeState(cwd, mode, sessionId) {
+    const stateFile = getStateFilePath(cwd, mode, sessionId);
     return existsSync(stateFile);
 }
 /**

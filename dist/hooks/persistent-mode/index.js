@@ -191,7 +191,7 @@ async function checkRalphLoop(sessionId, directory) {
     if (prdStatus.hasPrd && prdStatus.allComplete) {
         // All PRD stories complete - allow completion
         clearRalphState(workingDir, sessionId);
-        clearVerificationState(workingDir);
+        clearVerificationState(workingDir, sessionId);
         deactivateUltrawork(workingDir, sessionId);
         return {
             shouldBlock: false,
@@ -200,7 +200,7 @@ async function checkRalphLoop(sessionId, directory) {
         };
     }
     // Check for existing verification state (architect verification in progress)
-    const verificationState = readVerificationState(workingDir);
+    const verificationState = readVerificationState(workingDir, sessionId);
     if (verificationState?.pending) {
         // Verification is in progress - check for architect's response
         if (sessionId) {
@@ -208,7 +208,7 @@ async function checkRalphLoop(sessionId, directory) {
             if (checkArchitectApprovalInTranscript(sessionId)) {
                 // Architect approved - truly complete
                 // Also deactivate ultrawork if it was active alongside ralph
-                clearVerificationState(workingDir);
+                clearVerificationState(workingDir, sessionId);
                 clearRalphState(workingDir, sessionId);
                 deactivateUltrawork(workingDir, sessionId);
                 return {
@@ -221,8 +221,8 @@ async function checkRalphLoop(sessionId, directory) {
             const rejection = checkArchitectRejectionInTranscript(sessionId);
             if (rejection.rejected) {
                 // Architect rejected - continue with feedback
-                recordArchitectFeedback(workingDir, false, rejection.feedback);
-                const updatedVerification = readVerificationState(workingDir);
+                recordArchitectFeedback(workingDir, false, rejection.feedback, sessionId);
+                const updatedVerification = readVerificationState(workingDir, sessionId);
                 if (updatedVerification) {
                     const continuationPrompt = getArchitectRejectionContinuationPrompt(updatedVerification);
                     return {
@@ -253,7 +253,7 @@ async function checkRalphLoop(sessionId, directory) {
     if (state.iteration >= state.max_iterations) {
         // Also deactivate ultrawork if it was active alongside ralph
         clearRalphState(workingDir, sessionId);
-        clearVerificationState(workingDir);
+        clearVerificationState(workingDir, sessionId);
         deactivateUltrawork(workingDir, sessionId);
         return {
             shouldBlock: false,
@@ -426,7 +426,7 @@ export async function checkPersistentModes(sessionId, directory, stopContext // 
         return ralphResult;
     }
     // Priority 1.5: Autopilot (full orchestration mode - higher than ultrawork, lower than ralph)
-    if (isAutopilotActive(workingDir)) {
+    if (isAutopilotActive(workingDir, sessionId)) {
         const autopilotResult = await checkAutopilot(sessionId, workingDir);
         if (autopilotResult?.shouldBlock) {
             return {

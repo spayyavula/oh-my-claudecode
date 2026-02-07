@@ -44,11 +44,11 @@ describe('delegation-enforcer', () => {
             const input = {
                 description: 'Test task',
                 prompt: 'Do something',
-                subagent_type: 'executor-low'
+                subagent_type: 'debugger'
             };
             const result = enforceModel(input);
             expect(result.injected).toBe(true);
-            expect(result.modifiedInput.model).toBe('haiku'); // executor-low defaults to haiku
+            expect(result.modifiedInput.model).toBe('sonnet'); // debugger defaults to sonnet
         });
         it('throws error for unknown agent type', () => {
             const input = {
@@ -86,19 +86,20 @@ describe('delegation-enforcer', () => {
             const result = enforceModel(input);
             expect(result.warning).toBeUndefined();
         });
-        it('works with all tiered agents', () => {
+        it('works with all agents', () => {
             const testCases = [
                 { agent: 'architect', expectedModel: 'opus' },
-                { agent: 'architect-medium', expectedModel: 'sonnet' },
-                { agent: 'architect-low', expectedModel: 'haiku' },
                 { agent: 'executor', expectedModel: 'sonnet' },
-                { agent: 'executor-high', expectedModel: 'opus' },
-                { agent: 'executor-low', expectedModel: 'haiku' },
                 { agent: 'explore', expectedModel: 'haiku' },
-                { agent: 'explore-medium', expectedModel: 'sonnet' },
                 { agent: 'designer', expectedModel: 'sonnet' },
-                { agent: 'designer-high', expectedModel: 'opus' },
-                { agent: 'designer-low', expectedModel: 'haiku' }
+                { agent: 'debugger', expectedModel: 'sonnet' },
+                { agent: 'verifier', expectedModel: 'sonnet' },
+                { agent: 'style-reviewer', expectedModel: 'haiku' },
+                { agent: 'quality-reviewer', expectedModel: 'sonnet' },
+                { agent: 'api-reviewer', expectedModel: 'sonnet' },
+                { agent: 'performance-reviewer', expectedModel: 'sonnet' },
+                { agent: 'dependency-expert', expectedModel: 'sonnet' },
+                { agent: 'test-engineer', expectedModel: 'sonnet' }
             ];
             for (const testCase of testCases) {
                 const input = {
@@ -192,12 +193,12 @@ describe('delegation-enforcer', () => {
     describe('getModelForAgent', () => {
         it('returns correct model for agent with prefix', () => {
             expect(getModelForAgent('oh-my-claudecode:executor')).toBe('sonnet');
-            expect(getModelForAgent('oh-my-claudecode:executor-low')).toBe('haiku');
+            expect(getModelForAgent('oh-my-claudecode:debugger')).toBe('sonnet');
             expect(getModelForAgent('oh-my-claudecode:architect')).toBe('opus');
         });
         it('returns correct model for agent without prefix', () => {
             expect(getModelForAgent('executor')).toBe('sonnet');
-            expect(getModelForAgent('executor-low')).toBe('haiku');
+            expect(getModelForAgent('debugger')).toBe('sonnet');
             expect(getModelForAgent('architect')).toBe('opus');
         });
         it('throws error for unknown agent', () => {

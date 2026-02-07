@@ -65,6 +65,48 @@ export function isModelError(output) {
     return { isError: false, message: '' };
 }
 /**
+ * Check if an error message or output indicates a rate-limit (429) error
+ * that should trigger a fallback to the next model in the chain.
+ */
+export function isRateLimitError(output, stderr = '') {
+    const combined = `${output}\n${stderr}`;
+    // Check for 429 status codes and rate limit messages in both stdout and stderr
+    if (/429|rate.?limit|too many requests|quota.?exceeded|resource.?exhausted/i.test(combined)) {
+        // Extract a meaningful message
+        const lines = combined.split('\n').filter(l => l.trim());
+        for (const line of lines) {
+            try {
+                const event = JSON.parse(line);
+                const msg = typeof event.message === 'string' ? event.message :
+                    typeof event.error?.message === 'string' ? event.error.message : '';
+                if (/429|rate.?limit|too many requests|quota.?exceeded|resource.?exhausted/i.test(msg)) {
+                    return { isError: true, message: msg };
+                }
+            }
+            catch { /* check raw line */ }
+            if (/429|rate.?limit|too many requests|quota.?exceeded|resource.?exhausted/i.test(line)) {
+                return { isError: true, message: line.trim() };
+            }
+        }
+        return { isError: true, message: 'Rate limit error detected' };
+    }
+    return { isError: false, message: '' };
+}
+/**
+ * Check if an error is retryable (model error OR rate limit error)
+ */
+export function isRetryableError(output, stderr = '') {
+    const modelErr = isModelError(output);
+    if (modelErr.isError) {
+        return { isError: true, message: modelErr.message, type: 'model' };
+    }
+    const rateErr = isRateLimitError(output, stderr);
+    if (rateErr.isError) {
+        return { isError: true, message: rateErr.message, type: 'rate_limit' };
+    }
+    return { isError: false, message: '', type: 'none' };
+}
+/**
  * Parse Codex JSONL output to extract the final text response
  *
  * Codex CLI (--json mode) emits JSONL events. We extract text from:
@@ -149,16 +191,23 @@ export function executeCodex(prompt, model, cwd) {
                 settled = true;
                 clearTimeout(timeoutHandle);
                 if (code === 0 || stdout.trim()) {
-                    const modelErr = isModelError(stdout);
-                    if (modelErr.isError) {
-                        reject(new Error(`Codex model error: ${modelErr.message}`));
+                    const retryable = isRetryableError(stdout, stderr);
+                    if (retryable.isError) {
+                        reject(new Error(`Codex ${retryable.type === 'rate_limit' ? 'rate limit' : 'model'} error: ${retryable.message}`));
                     }
                     else {
                         resolve(parseCodexOutput(stdout));
                     }
                 }
                 else {
-                    reject(new Error(`Codex exited with code ${code}: ${stderr || 'No output'}`));
+                    // Check stderr for rate limit errors before generic failure
+                    const retryableExit = isRateLimitError(stderr, stdout);
+                    if (retryableExit.isError) {
+                        reject(new Error(`Codex rate limit error: ${retryableExit.message}`));
+                    }
+                    else {
+                        reject(new Error(`Codex exited with code ${code}: ${stderr || 'No output'}`));
+                    }
                 }
             }
         });
@@ -211,9 +260,9 @@ export async function executeCodexWithFallback(prompt, model, cwd) {
         }
         catch (err) {
             lastError = err;
-            // Only retry on model errors
-            if (!/model error|model_not_found|model is not supported/i.test(lastError.message)) {
-                throw lastError; // Non-model error, don't retry
+            // Retry on model errors and rate limit errors
+            if (!/model error|model_not_found|model is not supported|429|rate.?limit|too many requests|quota.?exceeded|resource.?exhausted/i.test(lastError.message)) {
+                throw lastError; // Non-retryable error, don't retry
             }
             // Continue to next model in chain
         }
@@ -319,9 +368,9 @@ export function executeCodexBackground(fullPrompt, modelInput, jobMeta, workingD
                     return; // Status already set by kill_job, don't overwrite
                 }
                 if (code === 0 || stdout.trim()) {
-                    // Check for model errors and retry with fallback if available
-                    const modelErr = isModelError(stdout);
-                    if (modelErr.isError && remainingModels.length > 0) {
+                    // Check for retryable errors (model errors + rate limit/429 errors)
+                    const retryableErr = isRetryableError(stdout, stderr);
+                    if (retryableErr.isError && remainingModels.length > 0) {
                         // Retry with next model in chain
                         const nextModel = remainingModels[0];
                         const newRemainingModels = remainingModels.slice(1);
@@ -337,13 +386,13 @@ export function executeCodexBackground(fullPrompt, modelInput, jobMeta, workingD
                         }
                         return;
                     }
-                    if (modelErr.isError) {
+                    if (retryableErr.isError) {
                         // No remaining models and current model errored
                         writeJobStatus({
                             ...initialStatus,
                             status: 'failed',
                             completedAt: new Date().toISOString(),
-                            error: `All models in fallback chain failed. Last error: ${modelErr.message}`,
+                            error: `All models in fallback chain failed. Last error (${retryableErr.type}): ${retryableErr.message}`,
                         }, workingDirectory);
                         return;
                     }
@@ -370,6 +419,22 @@ export function executeCodexBackground(fullPrompt, modelInput, jobMeta, workingD
                     }, workingDirectory);
                 }
                 else {
+                    // Check if the failure is a retryable error (429/rate limit) before giving up
+                    const retryableExit = isRetryableError(stderr, stdout);
+                    if (retryableExit.isError && remainingModels.length > 0) {
+                        const nextModel = remainingModels[0];
+                        const newRemainingModels = remainingModels.slice(1);
+                        const retryResult = trySpawnWithModel(nextModel, newRemainingModels);
+                        if ('error' in retryResult) {
+                            writeJobStatus({
+                                ...initialStatus,
+                                status: 'failed',
+                                completedAt: new Date().toISOString(),
+                                error: `Fallback spawn failed for model ${nextModel}: ${retryResult.error}`,
+                            }, workingDirectory);
+                        }
+                        return;
+                    }
                     writeJobStatus({
                         ...initialStatus,
                         status: 'failed',

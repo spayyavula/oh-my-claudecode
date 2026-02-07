@@ -8,7 +8,7 @@
 import { readFileSync, openSync, readSync, closeSync, statSync, existsSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
-import { validateResolvedPath, writeFileWithMode, ensureDirWithMode } from './fs-utils.js';
+import { validateResolvedPath, writeFileWithMode, atomicWriteJson, ensureDirWithMode } from './fs-utils.js';
 import { sanitizeName } from './tmux-session.js';
 const MAX_OUTBOX_READ_SIZE = 10 * 1024 * 1024; // 10MB cap per read
 function teamsDir() {
@@ -62,11 +62,11 @@ export function readNewOutboxMessages(teamName, workerName) {
         }
         catch { /* skip malformed lines */ }
     }
-    // Update cursor
+    // Update cursor atomically to prevent corruption on crash
     const newCursor = { bytesRead: cursor.bytesRead + bytesToRead };
     const cursorDir = join(teamsDir(), safeName, 'outbox');
     ensureDirWithMode(cursorDir);
-    writeFileWithMode(cursorPath, JSON.stringify(newCursor));
+    atomicWriteJson(cursorPath, newCursor);
     return messages;
 }
 /**

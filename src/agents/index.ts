@@ -22,10 +22,9 @@ export {
   loadAgentPrompt
 } from './utils.js';
 
-// Individual agent exports (rebranded intuitive names)
+// Individual agent exports
 export { architectAgent, ARCHITECT_PROMPT_METADATA } from './architect.js';
 export { exploreAgent, EXPLORE_PROMPT_METADATA } from './explore.js';
-export { researcherAgent, RESEARCHER_PROMPT_METADATA } from './researcher.js';
 export { executorAgent, SISYPHUS_JUNIOR_PROMPT_METADATA } from './executor.js';
 export { designerAgent, FRONTEND_ENGINEER_PROMPT_METADATA } from './designer.js';
 export { writerAgent, DOCUMENT_WRITER_PROMPT_METADATA } from './writer.js';
@@ -37,28 +36,70 @@ export { qaTesterAgent, QA_TESTER_PROMPT_METADATA } from './qa-tester.js';
 export { scientistAgent, SCIENTIST_PROMPT_METADATA } from './scientist.js';
 export { deepExecutorAgent, DEEP_EXECUTOR_PROMPT_METADATA } from './deep-executor.js';
 
-// Tiered agent variants (prompts loaded dynamically from /agents/*.md)
+// Backward compatibility: Deprecated researcher export
+/** @deprecated Use dependency-expert agent instead */
+export { researcherAgent, RESEARCHER_PROMPT_METADATA } from './researcher.js';
+
+// Reformed agents (Build/Analysis Lane)
 export {
-  architectMediumAgent,
-  architectLowAgent,
-  executorHighAgent,
-  executorLowAgent,
-  exploreHighAgent,
-  designerLowAgent,
-  designerHighAgent,
-  scientistHighAgent
+  debuggerAgent,
+  verifierAgent
 } from './definitions.js';
 
-// Specialized agents (Security, Build, TDD, Code Review, Git)
+// Reformed agents (Review Lane)
+export {
+  styleReviewerAgent,
+  qualityReviewerAgent,
+  apiReviewerAgent,
+  performanceReviewerAgent
+} from './definitions.js';
+
+// Reformed agents (Domain Specialists)
+export {
+  dependencyExpertAgent,
+  testEngineerAgent,
+  qualityStrategistAgent
+} from './definitions.js';
+
+// Reformed agents (Product Lane)
+export {
+  productManagerAgent,
+  uxResearcherAgent,
+  informationArchitectAgent,
+  productAnalystAgent
+} from './definitions.js';
+
+// Specialized agents (Security, Build, Code Review, Git)
 export {
   securityReviewerAgent,
-  securityReviewerLowAgent,
   buildFixerAgent,
-  tddGuideAgent,
-  tddGuideLowAgent,
   codeReviewerAgent,
   gitMasterAgent
 } from './definitions.js';
+
+// Backward compatibility: Deprecated tiered agent aliases
+/** @deprecated Use agent with model parameter instead */
+export const architectMediumAgent = undefined;
+/** @deprecated Use agent with model parameter instead */
+export const architectLowAgent = undefined;
+/** @deprecated Use agent with model parameter instead */
+export const executorHighAgent = undefined;
+/** @deprecated Use agent with model parameter instead */
+export const executorLowAgent = undefined;
+/** @deprecated Use agent with model parameter instead */
+export const exploreHighAgent = undefined;
+/** @deprecated Use agent with model parameter instead */
+export const designerLowAgent = undefined;
+/** @deprecated Use agent with model parameter instead */
+export const designerHighAgent = undefined;
+/** @deprecated Use agent with model parameter instead */
+export const scientistHighAgent = undefined;
+/** @deprecated Use security-reviewer agent instead */
+export const securityReviewerLowAgent = undefined;
+/** @deprecated Use test-engineer agent instead */
+export const tddGuideAgent = undefined;
+/** @deprecated Use test-engineer agent instead */
+export const tddGuideLowAgent = undefined;
 
 // Core exports (getAgentDefinitions and omcSystemPrompt)
 export {

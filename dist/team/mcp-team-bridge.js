@@ -6,7 +6,7 @@
  * Polls task files, builds prompts, spawns CLI processes, reports results.
  */
 import { spawn } from 'child_process';
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, openSync, readSync, closeSync } from 'fs';
 import { join } from 'path';
 import { writeFileWithMode, ensureDirWithMode } from './fs-utils.js';
 import { findNextTask, updateTask, writeTaskFailure, readTaskFailure, isTaskRetryExhausted } from './task-file-ops.js';
@@ -15,6 +15,7 @@ import { unregisterMcpWorker } from './team-registration.js';
 import { writeHeartbeat, deleteHeartbeat } from './heartbeat.js';
 import { killSession } from './tmux-session.js';
 import { logAuditEvent } from './audit-log.js';
+import { getEffectivePermissions, findPermissionViolations } from './permissions.js';
 /** Simple logger */
 function log(message) {
     const ts = new Date().toISOString();
@@ -37,6 +38,70 @@ function audit(config, eventType, taskId, details) {
 /** Sleep helper */
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
+}
+/**
+ * Capture a snapshot of tracked/modified/untracked files in the working directory.
+ * Uses `git status --porcelain` + `git ls-files --others --exclude-standard`.
+ * Returns a Set of relative file paths that currently exist or are modified.
+ */
+function captureFileSnapshot(cwd) {
+    const { execSync } = require('child_process');
+    const files = new Set();
+    try {
+        // Get all tracked files that are modified, added, or staged
+        const statusOutput = execSync('git status --porcelain', { cwd, encoding: 'utf-8', timeout: 10000 });
+        for (const line of statusOutput.split('\n')) {
+            if (!line.trim())
+                continue;
+            // Format: "XY filename" or "XY filename -> newname"
+            const filePart = line.slice(3);
+            const arrowIdx = filePart.indexOf(' -> ');
+            const fileName = arrowIdx !== -1 ? filePart.slice(arrowIdx + 4) : filePart;
+            files.add(fileName.trim());
+        }
+        // Get untracked files
+        const untrackedOutput = execSync('git ls-files --others --exclude-standard', { cwd, encoding: 'utf-8', timeout: 10000 });
+        for (const line of untrackedOutput.split('\n')) {
+            if (line.trim())
+                files.add(line.trim());
+        }
+    }
+    catch {
+        // If git commands fail, return empty set (no snapshot = no enforcement possible)
+    }
+    return files;
+}
+/**
+ * Diff two file snapshots to find newly changed/created files.
+ * Returns paths that are in `after` but not in `before` (new or newly modified files).
+ */
+function diffSnapshots(before, after) {
+    const changed = [];
+    for (const path of after) {
+        if (!before.has(path)) {
+            changed.push(path);
+        }
+    }
+    return changed;
+}
+/**
+ * Build effective WorkerPermissions from BridgeConfig.
+ * Merges config.permissions with secure deny-defaults.
+ */
+function buildEffectivePermissions(config) {
+    if (config.permissions) {
+        return getEffectivePermissions({
+            workerName: config.workerName,
+            allowedPaths: config.permissions.allowedPaths || [],
+            deniedPaths: config.permissions.deniedPaths || [],
+            allowedCommands: config.permissions.allowedCommands || [],
+            maxFileSize: config.permissions.maxFileSize ?? Infinity,
+        });
+    }
+    // No explicit permissions — still apply secure deny-defaults
+    return getEffectivePermissions({
+        workerName: config.workerName,
+    });
 }
 /** Maximum stdout/stderr buffer size (10MB) */
 const MAX_BUFFER_SIZE = 10 * 1024 * 1024;
@@ -67,10 +132,18 @@ const MAX_INBOX_CONTEXT_SIZE = 20000;
  */
 export function sanitizePromptContent(content, maxLength) {
     let sanitized = content.length > maxLength ? content.slice(0, maxLength) : content;
-    // Escape XML-like tags that match our prompt delimiters
-    sanitized = sanitized.replace(/<(\/?)(TASK_SUBJECT)>/g, '[$1$2]');
-    sanitized = sanitized.replace(/<(\/?)(TASK_DESCRIPTION)>/g, '[$1$2]');
-    sanitized = sanitized.replace(/<(\/?)(INBOX_MESSAGE)>/g, '[$1$2]');
+    // If truncation split a surrogate pair, remove the dangling high surrogate
+    if (sanitized.length > 0) {
+        const lastCode = sanitized.charCodeAt(sanitized.length - 1);
+        if (lastCode >= 0xD800 && lastCode <= 0xDBFF) {
+            sanitized = sanitized.slice(0, -1);
+        }
+    }
+    // Escape XML-like tags that match our prompt delimiters (including tags with attributes)
+    sanitized = sanitized.replace(/<(\/?)(TASK_SUBJECT)[^>]*>/gi, '[$1$2]');
+    sanitized = sanitized.replace(/<(\/?)(TASK_DESCRIPTION)[^>]*>/gi, '[$1$2]');
+    sanitized = sanitized.replace(/<(\/?)(INBOX_MESSAGE)[^>]*>/gi, '[$1$2]');
+    sanitized = sanitized.replace(/<(\/?)(INSTRUCTIONS)[^>]*>/gi, '[$1$2]');
     return sanitized;
 }
 /** Format the prompt template with sanitized content */
@@ -128,6 +201,12 @@ function buildTaskPrompt(task, messages, config) {
         sanitizedDescription = sanitizedDescription.slice(0, Math.max(0, sanitizedDescription.length - overBy));
         // Rebuild with truncated description
         result = formatPromptTemplate(sanitizedSubject, sanitizedDescription, config.workingDirectory, inboxContext);
+        // Final safety check: if still over limit after rebuild, hard-trim the description further
+        if (result.length > MAX_PROMPT_SIZE) {
+            const stillOverBy = result.length - MAX_PROMPT_SIZE;
+            sanitizedDescription = sanitizedDescription.slice(0, Math.max(0, sanitizedDescription.length - stillOverBy));
+            result = formatPromptTemplate(sanitizedSubject, sanitizedDescription, config.workingDirectory, inboxContext);
+        }
     }
     return result;
 }
@@ -144,45 +223,70 @@ function writePromptFile(config, taskId, prompt) {
 function getOutputPath(config, taskId) {
     const dir = join(config.workingDirectory, '.omc', 'outputs');
     ensureDirWithMode(dir);
-    return join(dir, `team-${config.teamName}-task-${taskId}-${Date.now()}.md`);
+    const suffix = Math.random().toString(36).slice(2, 8);
+    return join(dir, `team-${config.teamName}-task-${taskId}-${Date.now()}-${suffix}.md`);
 }
 /** Read output summary (first 500 chars) */
 function readOutputSummary(outputFile) {
     try {
         if (!existsSync(outputFile))
             return '(no output file)';
-        const content = readFileSync(outputFile, 'utf-8');
-        if (content.length > 500) {
-            return content.slice(0, 500) + '... (truncated)';
+        const buf = Buffer.alloc(1024);
+        const fd = openSync(outputFile, 'r');
+        try {
+            const bytesRead = readSync(fd, buf, 0, 1024, 0);
+            if (bytesRead === 0)
+                return '(empty output)';
+            const content = buf.toString('utf-8', 0, bytesRead);
+            if (content.length > 500) {
+                return content.slice(0, 500) + '... (truncated)';
+            }
+            return content;
         }
-        return content || '(empty output)';
+        finally {
+            closeSync(fd);
+        }
     }
     catch {
         return '(error reading output)';
     }
 }
+/** Maximum accumulated size for parseCodexOutput (1MB) */
+const MAX_CODEX_OUTPUT_SIZE = 1024 * 1024;
 /** Parse Codex JSONL output to extract text responses */
 function parseCodexOutput(output) {
     const lines = output.trim().split('\n').filter(l => l.trim());
     const messages = [];
+    let totalSize = 0;
     for (const line of lines) {
+        if (totalSize >= MAX_CODEX_OUTPUT_SIZE) {
+            messages.push('[output truncated]');
+            break;
+        }
         try {
             const event = JSON.parse(line);
             if (event.type === 'item.completed' && event.item?.type === 'agent_message' && event.item.text) {
                 messages.push(event.item.text);
+                totalSize += event.item.text.length;
             }
             if (event.type === 'message' && event.content) {
-                if (typeof event.content === 'string')
+                if (typeof event.content === 'string') {
                     messages.push(event.content);
+                    totalSize += event.content.length;
+                }
                 else if (Array.isArray(event.content)) {
                     for (const part of event.content) {
-                        if (part.type === 'text' && part.text)
+                        if (part.type === 'text' && part.text) {
                             messages.push(part.text);
+                            totalSize += part.text.length;
+                        }
                     }
                 }
             }
-            if (event.type === 'output_text' && event.text)
+            if (event.type === 'output_text' && event.text) {
                 messages.push(event.text);
+                totalSize += event.text.length;
+            }
         }
         catch { /* skip non-JSON lines */ }
     }
@@ -233,12 +337,13 @@ function spawnCliProcess(provider, prompt, model, cwd, timeoutMs) {
             if (!settled) {
                 settled = true;
                 clearTimeout(timeoutHandle);
-                if (code === 0 || stdout.trim()) {
+                if (code === 0) {
                     const response = provider === 'codex' ? parseCodexOutput(stdout) : stdout.trim();
                     resolve(response);
                 }
                 else {
-                    reject(new Error(`CLI exited with code ${code}: ${stderr || 'No output'}`));
+                    const detail = stderr || stdout.trim() || 'No output';
+                    reject(new Error(`CLI exited with code ${code}: ${detail}`));
                 }
             }
         });
@@ -383,8 +488,14 @@ export async function runBridge(config) {
                 const promptFile = writePromptFile(config, task.id, prompt);
                 const outputFile = getOutputPath(config, task.id);
                 log(`[bridge] Executing task ${task.id}: ${task.subject}`);
-                // --- 8. Execute CLI ---
+                // --- 8. Execute CLI (with permission enforcement) ---
                 try {
+                    // 8a. Capture pre-execution file snapshot (for permission enforcement)
+                    const enforcementMode = config.permissionEnforcement || 'off';
+                    let preSnapshot = null;
+                    if (enforcementMode !== 'off') {
+                        preSnapshot = captureFileSnapshot(workingDirectory);
+                    }
                     const { child, result } = spawnCliProcess(provider, prompt, config.model, workingDirectory, config.taskTimeoutMs);
                     activeChild = child;
                     audit(config, 'cli_spawned', task.id, { provider, model: config.model });
@@ -392,19 +503,82 @@ export async function runBridge(config) {
                     activeChild = null;
                     // Write response to output file
                     writeFileWithMode(outputFile, response);
-                    // --- 9. Mark complete ---
-                    updateTask(teamName, task.id, { status: 'completed' });
-                    audit(config, 'task_completed', task.id);
-                    consecutiveErrors = 0;
-                    // --- 10. Report to lead ---
-                    const summary = readOutputSummary(outputFile);
-                    appendOutbox(teamName, workerName, {
-                        type: 'task_complete',
-                        taskId: task.id,
-                        summary,
-                        timestamp: new Date().toISOString()
-                    });
-                    log(`[bridge] Task ${task.id} completed`);
+                    // 8b. Post-execution permission check
+                    let violations = [];
+                    if (enforcementMode !== 'off' && preSnapshot) {
+                        const postSnapshot = captureFileSnapshot(workingDirectory);
+                        const changedPaths = diffSnapshots(preSnapshot, postSnapshot);
+                        if (changedPaths.length > 0) {
+                            const effectivePerms = buildEffectivePermissions(config);
+                            violations = findPermissionViolations(changedPaths, effectivePerms, workingDirectory);
+                        }
+                    }
+                    // 8c. Handle violations
+                    if (violations.length > 0) {
+                        const violationSummary = violations
+                            .map(v => `  - ${v.path}: ${v.reason}`)
+                            .join('\n');
+                        if (enforcementMode === 'enforce') {
+                            // ENFORCE: fail the task, audit, report error
+                            audit(config, 'permission_violation', task.id, {
+                                violations: violations.map(v => ({ path: v.path, reason: v.reason })),
+                                mode: 'enforce',
+                            });
+                            updateTask(teamName, task.id, {
+                                status: 'completed',
+                                metadata: {
+                                    ...(task.metadata || {}),
+                                    error: `Permission violations detected (enforce mode)`,
+                                    permissionViolations: violations,
+                                    permanentlyFailed: true,
+                                },
+                            });
+                            appendOutbox(teamName, workerName, {
+                                type: 'error',
+                                taskId: task.id,
+                                error: `Permission violation (enforce mode):\n${violationSummary}`,
+                                timestamp: new Date().toISOString(),
+                            });
+                            log(`[bridge] Task ${task.id} failed: permission violations (enforce mode)`);
+                            consecutiveErrors = 0; // Not a CLI error, don't count toward quarantine
+                            // Skip normal completion flow
+                        }
+                        else {
+                            // AUDIT: log warning but allow task to succeed
+                            audit(config, 'permission_audit', task.id, {
+                                violations: violations.map(v => ({ path: v.path, reason: v.reason })),
+                                mode: 'audit',
+                            });
+                            log(`[bridge] Permission audit warning for task ${task.id}:\n${violationSummary}`);
+                            // Continue with normal completion
+                            updateTask(teamName, task.id, { status: 'completed' });
+                            audit(config, 'task_completed', task.id);
+                            consecutiveErrors = 0;
+                            const summary = readOutputSummary(outputFile);
+                            appendOutbox(teamName, workerName, {
+                                type: 'task_complete',
+                                taskId: task.id,
+                                summary: `${summary}\n[AUDIT WARNING: ${violations.length} permission violation(s) detected]`,
+                                timestamp: new Date().toISOString(),
+                            });
+                            log(`[bridge] Task ${task.id} completed (with ${violations.length} audit warning(s))`);
+                        }
+                    }
+                    else {
+                        // --- 9. Mark complete (no violations) ---
+                        updateTask(teamName, task.id, { status: 'completed' });
+                        audit(config, 'task_completed', task.id);
+                        consecutiveErrors = 0;
+                        // --- 10. Report to lead ---
+                        const summary = readOutputSummary(outputFile);
+                        appendOutbox(teamName, workerName, {
+                            type: 'task_complete',
+                            taskId: task.id,
+                            summary,
+                            timestamp: new Date().toISOString()
+                        });
+                        log(`[bridge] Task ${task.id} completed`);
+                    }
                 }
                 catch (err) {
                     activeChild = null;

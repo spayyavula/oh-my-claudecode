@@ -13,8 +13,6 @@ import { loadAgentPrompt, parseDisallowedTools } from './utils.js';
 
 // Re-export base agents from individual files (rebranded names)
 export { architectAgent } from './architect.js';
-export { researcherAgent } from './researcher.js';
-export { exploreAgent } from './explore.js';
 export { designerAgent } from './designer.js';
 export { writerAgent } from './writer.js';
 export { visionAgent } from './vision.js';
@@ -25,11 +23,14 @@ export { plannerAgent } from './planner.js';
 export { deepExecutorAgent } from './deep-executor.js';
 export { qaTesterAgent } from './qa-tester.js';
 export { scientistAgent } from './scientist.js';
+export { exploreAgent } from './explore.js';
+
+// Backward compatibility: Deprecated aliases
+/** @deprecated Use dependency-expert agent instead */
+export { researcherAgent } from './researcher.js';
 
 // Import base agents for use in getAgentDefinitions
 import { architectAgent } from './architect.js';
-import { researcherAgent } from './researcher.js';
-import { exploreAgent } from './explore.js';
 import { designerAgent } from './designer.js';
 import { writerAgent } from './writer.js';
 import { visionAgent } from './vision.js';
@@ -40,114 +41,171 @@ import { plannerAgent } from './planner.js';
 import { deepExecutorAgent } from './deep-executor.js';
 import { qaTesterAgent } from './qa-tester.js';
 import { scientistAgent } from './scientist.js';
+import { exploreAgent } from './explore.js';
+import { researcherAgent } from './researcher.js';
 
 // Re-export loadAgentPrompt (also exported from index.ts)
 export { loadAgentPrompt };
 
 // ============================================================
-// TIERED AGENT VARIANTS
-// Use these for smart model routing based on task complexity:
-// - HIGH tier (opus): Complex analysis, architecture, debugging
-// - MEDIUM tier (sonnet): Standard tasks, moderate complexity
-// - LOW tier (haiku): Simple lookups, trivial operations
+// REFORMED AGENTS (BUILD/ANALYSIS LANE)
 // ============================================================
 
 /**
- * Architect-Medium Agent - Standard Analysis (Sonnet)
- * @deprecated Use architect agent with model="sonnet" instead
+ * Debugger Agent - Root-Cause Analysis & Debugging (Sonnet)
  */
-export const architectMediumAgent: AgentConfig = {
-  name: 'architect-medium',
-  description: 'Architecture & Debugging Advisor - Medium complexity (Sonnet). Use for moderate analysis.',
-  prompt: loadAgentPrompt('architect-medium'),
+export const debuggerAgent: AgentConfig = {
+  name: 'debugger',
+  description: 'Root-cause analysis, regression isolation, failure diagnosis (Sonnet).',
+  prompt: loadAgentPrompt('debugger'),
   model: 'sonnet',
   defaultModel: 'sonnet'
 };
 
 /**
- * Architect-Low Agent - Quick Analysis (Haiku)
- * @deprecated Use architect agent with model="haiku" instead
+ * Verifier Agent - Completion Evidence & Test Validation (Sonnet)
  */
-export const architectLowAgent: AgentConfig = {
-  name: 'architect-low',
-  description: 'Quick code questions & simple lookups (Haiku). Use for simple questions that need fast answers.',
-  prompt: loadAgentPrompt('architect-low'),
+export const verifierAgent: AgentConfig = {
+  name: 'verifier',
+  description: 'Completion evidence, claim validation, test adequacy (Sonnet).',
+  prompt: loadAgentPrompt('verifier'),
+  model: 'sonnet',
+  defaultModel: 'sonnet'
+};
+
+// ============================================================
+// REFORMED AGENTS (REVIEW LANE)
+// ============================================================
+
+/**
+ * Style-Reviewer Agent - Code Style & Conventions (Haiku)
+ */
+export const styleReviewerAgent: AgentConfig = {
+  name: 'style-reviewer',
+  description: 'Formatting, naming, idioms, lint/style conventions (Haiku).',
+  prompt: loadAgentPrompt('style-reviewer'),
   model: 'haiku',
   defaultModel: 'haiku'
 };
 
 /**
- * Executor-High Agent - Complex Execution (Opus)
- * @deprecated Use executor agent with model="opus" instead
+ * Quality-Reviewer Agent - Logic Defects & Maintainability (Sonnet)
  */
-export const executorHighAgent: AgentConfig = {
-  name: 'executor-high',
-  description: 'Complex task executor for multi-file changes (Opus). Use for tasks requiring deep reasoning.',
-  prompt: loadAgentPrompt('executor-high'),
-  model: 'opus',
-  defaultModel: 'opus'
+export const qualityReviewerAgent: AgentConfig = {
+  name: 'quality-reviewer',
+  description: 'Logic defects, maintainability, anti-patterns (Sonnet).',
+  prompt: loadAgentPrompt('quality-reviewer'),
+  model: 'sonnet',
+  defaultModel: 'sonnet'
 };
 
 /**
- * Executor-Low Agent - Simple Execution (Haiku)
- * @deprecated Use executor agent with model="haiku" instead
+ * API-Reviewer Agent - API Contracts & Versioning (Sonnet)
  */
-export const executorLowAgent: AgentConfig = {
-  name: 'executor-low',
-  description: 'Simple single-file task executor (Haiku). Use for trivial tasks.',
-  prompt: loadAgentPrompt('executor-low'),
-  model: 'haiku',
-  defaultModel: 'haiku'
-};
-
-
-/**
- * Explore-High Agent - Complex Architectural Search (Opus)
- * @deprecated Use explore agent with model="opus" instead
- */
-export const exploreHighAgent: AgentConfig = {
-  name: 'explore-high',
-  description: 'Complex architectural search for deep system understanding (Opus). Use for architectural mapping and design pattern discovery.',
-  prompt: loadAgentPrompt('explore-high'),
-  model: 'opus',
-  defaultModel: 'opus'
+export const apiReviewerAgent: AgentConfig = {
+  name: 'api-reviewer',
+  description: 'API contracts, versioning, backward compatibility (Sonnet).',
+  prompt: loadAgentPrompt('api-reviewer'),
+  model: 'sonnet',
+  defaultModel: 'sonnet'
 };
 
 /**
- * Designer-Low Agent - Simple UI Tasks (Haiku)
- * @deprecated Use designer agent with model="haiku" instead
+ * Performance-Reviewer Agent - Performance & Complexity (Sonnet)
  */
-export const designerLowAgent: AgentConfig = {
-  name: 'designer-low',
-  description: 'Simple styling and minor UI tweaks (Haiku). Use for trivial frontend work.',
-  prompt: loadAgentPrompt('designer-low'),
-  model: 'haiku',
-  defaultModel: 'haiku'
+export const performanceReviewerAgent: AgentConfig = {
+  name: 'performance-reviewer',
+  description: 'Hotspots, complexity, memory/latency optimization (Sonnet).',
+  prompt: loadAgentPrompt('performance-reviewer'),
+  model: 'sonnet',
+  defaultModel: 'sonnet'
+};
+
+// ============================================================
+// REFORMED AGENTS (DOMAIN SPECIALISTS)
+// ============================================================
+
+/**
+ * Dependency-Expert Agent - External SDK/API/Package Evaluation (Sonnet)
+ * Replaces: researcher agent
+ */
+export const dependencyExpertAgent: AgentConfig = {
+  name: 'dependency-expert',
+  description: 'External SDK/API/package evaluation (Sonnet).',
+  prompt: loadAgentPrompt('dependency-expert'),
+  model: 'sonnet',
+  defaultModel: 'sonnet'
 };
 
 /**
- * Designer-High Agent - Complex UI Architecture (Opus)
- * @deprecated Use designer agent with model="opus" instead
+ * Test-Engineer Agent - Test Strategy & Coverage (Sonnet)
+ * Replaces: tdd-guide agent
  */
-export const designerHighAgent: AgentConfig = {
-  name: 'designer-high',
-  description: 'Complex UI architecture and design systems (Opus). Use for sophisticated frontend work.',
-  prompt: loadAgentPrompt('designer-high'),
-  model: 'opus',
-  defaultModel: 'opus'
+export const testEngineerAgent: AgentConfig = {
+  name: 'test-engineer',
+  description: 'Test strategy, coverage, flaky test hardening (Sonnet).',
+  prompt: loadAgentPrompt('test-engineer'),
+  model: 'sonnet',
+  defaultModel: 'sonnet'
 };
 
+/**
+ * Quality-Strategist Agent - Quality Strategy & Release Readiness (Sonnet)
+ */
+export const qualityStrategistAgent: AgentConfig = {
+  name: 'quality-strategist',
+  description: 'Quality strategy, release readiness, risk assessment, and quality gates (Sonnet).',
+  prompt: loadAgentPrompt('quality-strategist'),
+  model: 'sonnet',
+  defaultModel: 'sonnet'
+};
+
+// ============================================================
+// REFORMED AGENTS (PRODUCT LANE)
+// ============================================================
 
 /**
- * Scientist-High Agent - Complex Research (Opus)
- * @deprecated Use scientist agent with model="opus" instead
+ * Product Manager Agent - Problem Framing & Value Hypothesis (Sonnet)
  */
-export const scientistHighAgent: AgentConfig = {
-  name: 'scientist-high',
-  description: 'Complex research, hypothesis testing, and ML specialist (Opus). Use for deep analysis.',
-  prompt: loadAgentPrompt('scientist-high'),
-  model: 'opus',
-  defaultModel: 'opus'
+export const productManagerAgent: AgentConfig = {
+  name: 'product-manager',
+  description: 'Problem framing, personas/JTBD, value hypothesis, PRDs, KPI trees (Sonnet).',
+  prompt: loadAgentPrompt('product-manager'),
+  model: 'sonnet',
+  defaultModel: 'sonnet'
+};
+
+/**
+ * UX Researcher Agent - Heuristic Audits & Usability (Sonnet)
+ */
+export const uxResearcherAgent: AgentConfig = {
+  name: 'ux-researcher',
+  description: 'Heuristic audits, usability risks, accessibility, research plans (Sonnet).',
+  prompt: loadAgentPrompt('ux-researcher'),
+  model: 'sonnet',
+  defaultModel: 'sonnet'
+};
+
+/**
+ * Information Architect Agent - Taxonomy & Navigation (Sonnet)
+ */
+export const informationArchitectAgent: AgentConfig = {
+  name: 'information-architect',
+  description: 'Taxonomy, navigation, findability, naming consistency (Sonnet).',
+  prompt: loadAgentPrompt('information-architect'),
+  model: 'sonnet',
+  defaultModel: 'sonnet'
+};
+
+/**
+ * Product Analyst Agent - Metrics & Experiment Design (Sonnet)
+ */
+export const productAnalystAgent: AgentConfig = {
+  name: 'product-analyst',
+  description: 'Product metrics, funnel analysis, experiment design, KPI definitions (Sonnet).',
+  prompt: loadAgentPrompt('product-analyst'),
+  model: 'sonnet',
+  defaultModel: 'sonnet'
 };
 
 // ============================================================
@@ -155,26 +213,14 @@ export const scientistHighAgent: AgentConfig = {
 // ============================================================
 
 /**
- * Security-Reviewer Agent - Security Vulnerability Detection (Opus)
+ * Security-Reviewer Agent - Security Vulnerability Detection (Sonnet)
  */
 export const securityReviewerAgent: AgentConfig = {
   name: 'security-reviewer',
-  description: 'Security vulnerability detection specialist (Opus). Use for security audits and code review.',
+  description: 'Security vulnerability detection specialist (Sonnet). Use for security audits and OWASP detection.',
   prompt: loadAgentPrompt('security-reviewer'),
-  model: 'opus',
-  defaultModel: 'opus'
-};
-
-/**
- * Security-Reviewer-Low Agent - Quick Security Scan (Haiku)
- * @deprecated Use security-reviewer agent with model="haiku" instead
- */
-export const securityReviewerLowAgent: AgentConfig = {
-  name: 'security-reviewer-low',
-  description: 'Quick security scan specialist (Haiku). Use for fast security checks on small code changes.',
-  prompt: loadAgentPrompt('security-reviewer-low'),
-  model: 'haiku',
-  defaultModel: 'haiku'
+  model: 'sonnet',
+  defaultModel: 'sonnet'
 };
 
 /**
@@ -186,30 +232,6 @@ export const buildFixerAgent: AgentConfig = {
   prompt: loadAgentPrompt('build-fixer'),
   model: 'sonnet',
   defaultModel: 'sonnet'
-};
-
-
-/**
- * TDD-Guide Agent - Test-Driven Development (Sonnet)
- */
-export const tddGuideAgent: AgentConfig = {
-  name: 'tdd-guide',
-  description: 'Test-Driven Development specialist (Sonnet). Use for TDD workflows and test coverage.',
-  prompt: loadAgentPrompt('tdd-guide'),
-  model: 'sonnet',
-  defaultModel: 'sonnet'
-};
-
-/**
- * TDD-Guide-Low Agent - Quick Test Suggestions (Haiku)
- * @deprecated Use tdd-guide agent with model="haiku" instead
- */
-export const tddGuideLowAgent: AgentConfig = {
-  name: 'tdd-guide-low',
-  description: 'Quick test suggestion specialist (Haiku). Use for simple test case ideas.',
-  prompt: loadAgentPrompt('tdd-guide-low'),
-  model: 'haiku',
-  defaultModel: 'haiku'
 };
 
 /**
@@ -234,6 +256,20 @@ export const gitMasterAgent: AgentConfig = {
   model: 'sonnet',
   defaultModel: 'sonnet'
 };
+
+// ============================================================
+// DEPRECATED ALIASES (Backward Compatibility)
+// ============================================================
+
+/**
+ * @deprecated Use dependency-expert agent instead
+ */
+export const researcherAgentAlias = dependencyExpertAgent;
+
+/**
+ * @deprecated Use test-engineer agent instead
+ */
+export const tddGuideAgentAlias = testEngineerAgent;
 
 // ============================================================
 // AGENT REGISTRY
@@ -266,45 +302,60 @@ export function getAgentDefinitions(overrides?: Partial<Record<string, Partial<A
   defaultModel?: ModelType;
 }> {
   const agents = {
-    // Base agents (from individual files)
-    // Role: code-analysis
-    // NotFor: requirements-gathering, plan-creation, plan-review
-    architect: architectAgent,
-    researcher: researcherAgent,
+    // ============================================================
+    // BUILD/ANALYSIS LANE
+    // ============================================================
     explore: exploreAgent,
+    analyst: analystAgent,
+    planner: plannerAgent,
+    architect: architectAgent,
+    debugger: debuggerAgent,
+    executor: executorAgent,
+    'deep-executor': deepExecutorAgent,
+    verifier: verifierAgent,
+
+    // ============================================================
+    // REVIEW LANE
+    // ============================================================
+    'style-reviewer': styleReviewerAgent,
+    'quality-reviewer': qualityReviewerAgent,
+    'api-reviewer': apiReviewerAgent,
+    'security-reviewer': securityReviewerAgent,
+    'performance-reviewer': performanceReviewerAgent,
+    'code-reviewer': codeReviewerAgent,
+
+    // ============================================================
+    // DOMAIN SPECIALISTS
+    // ============================================================
+    'dependency-expert': dependencyExpertAgent,
+    'test-engineer': testEngineerAgent,
+    'quality-strategist': qualityStrategistAgent,
+    'build-fixer': buildFixerAgent,
     designer: designerAgent,
     writer: writerAgent,
-    vision: visionAgent,
-    // Role: plan-review
-    // NotFor: requirements-gathering, plan-creation, code-analysis
-    critic: criticAgent,
-    // Role: requirements-analysis
-    // NotFor: code-analysis, plan-creation, plan-review
-    analyst: analystAgent,
-    executor: executorAgent,
-    // Role: plan-creation
-    // NotFor: requirements-gathering, code-analysis, plan-review
-    planner: plannerAgent,
-    'deep-executor': deepExecutorAgent,
     'qa-tester': qaTesterAgent,
     scientist: scientistAgent,
-    // Tiered variants (prompts loaded from /agents/*.md)
-    'architect-medium': architectMediumAgent,
-    'architect-low': architectLowAgent,
-    'executor-high': executorHighAgent,
-    'executor-low': executorLowAgent,
-    'explore-high': exploreHighAgent,
-    'designer-low': designerLowAgent,
-    'designer-high': designerHighAgent,
-    'scientist-high': scientistHighAgent,
-    // Specialized agents (Security, Build, TDD, Code Review)
-    'security-reviewer': securityReviewerAgent,
-    'security-reviewer-low': securityReviewerLowAgent,
-    'build-fixer': buildFixerAgent,
-    'tdd-guide': tddGuideAgent,
-    'tdd-guide-low': tddGuideLowAgent,
-    'code-reviewer': codeReviewerAgent,
-    'git-master': gitMasterAgent
+    'git-master': gitMasterAgent,
+
+    // ============================================================
+    // PRODUCT LANE
+    // ============================================================
+    'product-manager': productManagerAgent,
+    'ux-researcher': uxResearcherAgent,
+    'information-architect': informationArchitectAgent,
+    'product-analyst': productAnalystAgent,
+
+    // ============================================================
+    // COORDINATION
+    // ============================================================
+    critic: criticAgent,
+    vision: visionAgent,
+
+    // ============================================================
+    // BACKWARD COMPATIBILITY (Deprecated)
+    // ============================================================
+    researcher: researcherAgent,
+    'tdd-guide': testEngineerAgent
   };
 
   const result: Record<string, { description: string; prompt: string; tools?: string[]; disallowedTools?: string[]; model?: ModelType; defaultModel?: ModelType }> = {};
@@ -341,41 +392,46 @@ You are BOUND to your task list. You do not stop. You do not quit. You do not ta
 ## Your Core Duty
 You coordinate specialized subagents to accomplish complex software engineering tasks. Abandoning work mid-task is not an option. If you stop without completing ALL tasks, you have failed.
 
-## Available Subagents
+## Available Subagents (28 Agents)
 
-### Base Agents
-- **architect**: Architecture and debugging expert (opus) — use for complex analysis and verification
-- **researcher**: Documentation and external reference finder (sonnet) — use for docs/GitHub
-- **explore**: Fast pattern matching (haiku) — use for internal codebase search
-- **designer**: UI/UX specialist (sonnet) — use for visual/styling work
-- **writer**: Technical writing (haiku) — use for documentation
-- **vision**: Visual analysis (sonnet) — use for image/screenshot analysis
-- **critic**: Plan reviewer (opus) — use for critical evaluation
-- **analyst**: Pre-planning consultant (opus) — use for hidden requirement analysis
-- **executor**: Focused executor (sonnet) — use for direct implementation
-- **planner**: Strategic planner (opus) — use for comprehensive planning
-- **deep-executor**: Autonomous deep worker (opus) — use for complex goal-oriented tasks
-- **qa-tester**: CLI testing specialist (sonnet) — use for interactive CLI/service testing with tmux
-- **scientist**: Data analysis specialist (sonnet) — use for data analysis and statistics
+### Build/Analysis Lane
+- **explore**: Internal codebase discovery (haiku) — fast pattern matching
+- **analyst**: Requirements clarity (opus) — hidden constraint analysis
+- **planner**: Task sequencing (opus) — execution plans and risk flags
+- **architect**: System design (opus) — boundaries, interfaces, tradeoffs
+- **debugger**: Root-cause analysis (sonnet) — regression isolation, diagnosis
+- **executor**: Code implementation (sonnet) — features and refactoring
+- **deep-executor**: Complex execution (opus) — autonomous goal-oriented work
+- **verifier**: Completion validation (sonnet) — evidence, claims, test adequacy
 
-### Tiered Variants
-- **architect-medium**: Standard analysis (sonnet) — moderate complexity debugging
-- **architect-low**: Quick analysis (haiku) — simple lookups, fast answers
-- **executor-high**: Complex executor (opus) — multi-file refactoring
-- **executor-low**: Simple executor (haiku) — trivial single-file tasks
-- **explore-high**: Deep search (opus) — architectural mapping and design pattern discovery
-- **designer-low**: Simple UI (haiku) — minor styling tweaks
-- **designer-high**: Complex UI (opus) — design systems and architecture
-- **scientist-high**: Complex research (opus) — hypothesis testing and ML
+### Review Lane
+- **style-reviewer**: Code style (haiku) — formatting, naming, idioms
+- **quality-reviewer**: Logic defects (sonnet) — maintainability, anti-patterns
+- **api-reviewer**: API contracts (sonnet) — versioning, backward compatibility
+- **security-reviewer**: Security audits (sonnet) — vulns, trust boundaries, authn/authz
+- **performance-reviewer**: Performance (sonnet) — hotspots, complexity, optimization
+- **code-reviewer**: Comprehensive review (opus) — orchestrates all review aspects
 
-### Specialized Agents
-- **security-reviewer**: Security audit (opus) — vulnerability detection, OWASP Top 10
-- **security-reviewer-low**: Quick security scan (haiku) — fast checks on small changes
-- **build-fixer**: Build error resolution (sonnet) — fixing build/type errors
-- **tdd-guide**: TDD specialist (sonnet) — test-driven development workflows
-- **tdd-guide-low**: Quick test suggestions (haiku) — simple test case ideas
-- **code-reviewer**: Code review expert (opus) — comprehensive code quality review
-- **git-master**: Git operations expert (sonnet) — atomic commits, rebasing, history
+### Domain Specialists
+- **dependency-expert**: SDK/API evaluation (sonnet) — external package research
+- **test-engineer**: Test strategy (sonnet) — coverage, flaky test hardening
+- **quality-strategist**: Quality strategy (sonnet) — release readiness, risk assessment, quality gates
+- **build-fixer**: Build errors (sonnet) — toolchain/type failures
+- **designer**: UI/UX architecture (sonnet) — interaction design
+- **writer**: Documentation (haiku) — docs, migration notes
+- **qa-tester**: CLI testing (sonnet) — interactive runtime validation via tmux
+- **scientist**: Data analysis (sonnet) — statistics and research
+- **git-master**: Git operations (sonnet) — commits, rebasing, history
+
+### Product Lane
+- **product-manager**: Problem framing (sonnet) — personas, JTBD, PRDs, KPI trees
+- **ux-researcher**: UX research (sonnet) — heuristic audits, usability, accessibility
+- **information-architect**: Info architecture (sonnet) — taxonomy, navigation, findability
+- **product-analyst**: Product analytics (sonnet) — metrics, funnels, experiment design
+
+### Coordination
+- **critic**: Plan review (opus) — critical challenge and evaluation
+- **vision**: Visual analysis (sonnet) — images, screenshots, diagrams
 
 ## Orchestration Principles
 1. **Delegate Aggressively**: Fire off subagents for specialized tasks - don't do everything yourself

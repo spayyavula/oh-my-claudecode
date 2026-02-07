@@ -120,6 +120,74 @@ function killSession(teamName, workerName) {
 }
 
 // src/team/task-file-ops.ts
+var DEFAULT_STALE_LOCK_MS = 3e4;
+function isPidAlive(pid) {
+  if (pid <= 0 || !Number.isFinite(pid)) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    if (e && typeof e === "object" && "code" in e && e.code === "EPERM") return true;
+    return false;
+  }
+}
+function acquireTaskLock(teamName, taskId, opts) {
+  const staleLockMs = opts?.staleLockMs ?? DEFAULT_STALE_LOCK_MS;
+  const dir = tasksDir(teamName);
+  ensureDirWithMode(dir);
+  const lockPath = (0, import_path2.join)(dir, `${sanitizeTaskId(taskId)}.lock`);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const fd = (0, import_fs2.openSync)(lockPath, import_fs2.constants.O_CREAT | import_fs2.constants.O_EXCL | import_fs2.constants.O_WRONLY, 384);
+      const payload = JSON.stringify({
+        pid: process.pid,
+        workerName: opts?.workerName ?? "",
+        timestamp: Date.now()
+      });
+      (0, import_fs2.writeSync)(fd, payload, null, "utf-8");
+      return { fd, path: lockPath };
+    } catch (err) {
+      if (err && typeof err === "object" && "code" in err && err.code === "EEXIST") {
+        if (attempt === 0 && isLockStale(lockPath, staleLockMs)) {
+          try {
+            (0, import_fs2.unlinkSync)(lockPath);
+          } catch {
+          }
+          continue;
+        }
+        return null;
+      }
+      throw err;
+    }
+  }
+  return null;
+}
+function releaseTaskLock(handle) {
+  try {
+    (0, import_fs2.closeSync)(handle.fd);
+  } catch {
+  }
+  try {
+    (0, import_fs2.unlinkSync)(handle.path);
+  } catch {
+  }
+}
+function isLockStale(lockPath, staleLockMs) {
+  try {
+    const stat = (0, import_fs2.statSync)(lockPath);
+    const ageMs = Date.now() - stat.mtimeMs;
+    if (ageMs < staleLockMs) return false;
+    try {
+      const raw = (0, import_fs2.readFileSync)(lockPath, "utf-8");
+      const payload = JSON.parse(raw);
+      if (payload.pid && isPidAlive(payload.pid)) return false;
+    } catch {
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
 function sanitizeTaskId(taskId) {
   if (!/^[A-Za-z0-9._-]+$/.test(taskId)) {
     throw new Error(`Invalid task ID: "${taskId}" contains unsafe characters`);
@@ -147,21 +215,42 @@ function readTask(teamName, taskId) {
     return null;
   }
 }
-function updateTask(teamName, taskId, updates) {
-  const filePath = taskPath(teamName, taskId);
-  let task;
-  try {
-    const raw = (0, import_fs2.readFileSync)(filePath, "utf-8");
-    task = JSON.parse(raw);
-  } catch {
-    throw new Error(`Task file not found or malformed: ${taskId}`);
-  }
-  for (const [key, value] of Object.entries(updates)) {
-    if (value !== void 0) {
-      task[key] = value;
+function updateTask(teamName, taskId, updates, opts) {
+  const useLock = opts?.useLock ?? true;
+  const doUpdate = () => {
+    const filePath = taskPath(teamName, taskId);
+    let task;
+    try {
+      const raw = (0, import_fs2.readFileSync)(filePath, "utf-8");
+      task = JSON.parse(raw);
+    } catch {
+      throw new Error(`Task file not found or malformed: ${taskId}`);
     }
+    for (const [key, value] of Object.entries(updates)) {
+      if (value !== void 0) {
+        task[key] = value;
+      }
+    }
+    atomicWriteJson(filePath, task);
+  };
+  if (!useLock) {
+    doUpdate();
+    return;
   }
-  atomicWriteJson(filePath, task);
+  const handle = acquireTaskLock(teamName, taskId);
+  if (!handle) {
+    if (typeof process !== "undefined" && process.stderr) {
+      process.stderr.write(`[task-file-ops] WARN: could not acquire lock for task ${taskId}, updating without lock
+`);
+    }
+    doUpdate();
+    return;
+  }
+  try {
+    doUpdate();
+  } finally {
+    releaseTaskLock(handle);
+  }
 }
 async function findNextTask(teamName, workerName) {
   const dir = tasksDir(teamName);
@@ -173,18 +262,30 @@ async function findNextTask(teamName, workerName) {
     if (task.status !== "pending") continue;
     if (task.owner !== workerName) continue;
     if (!areBlockersResolved(teamName, task.blockedBy)) continue;
-    updateTask(teamName, id, {
-      claimedBy: workerName,
-      claimedAt: Date.now(),
-      claimPid: process.pid
-    });
-    const jitter = Math.floor(Math.random() * 100);
-    await new Promise((resolve4) => setTimeout(resolve4, 200 + jitter));
-    const freshTask = readTask(teamName, id);
-    if (!freshTask || freshTask.status !== "pending" || freshTask.claimedBy !== workerName || freshTask.claimPid !== process.pid) {
-      continue;
+    const handle = acquireTaskLock(teamName, id, { workerName });
+    if (!handle) continue;
+    try {
+      const freshTask = readTask(teamName, id);
+      if (!freshTask || freshTask.status !== "pending" || freshTask.owner !== workerName || !areBlockersResolved(teamName, freshTask.blockedBy)) {
+        continue;
+      }
+      const filePath = (0, import_path2.join)(tasksDir(teamName), `${sanitizeTaskId(id)}.json`);
+      let taskData;
+      try {
+        const raw = (0, import_fs2.readFileSync)(filePath, "utf-8");
+        taskData = JSON.parse(raw);
+      } catch {
+        continue;
+      }
+      taskData.claimedBy = workerName;
+      taskData.claimedAt = Date.now();
+      taskData.claimPid = process.pid;
+      taskData.status = "in_progress";
+      atomicWriteJson(filePath, taskData);
+      return { ...freshTask, claimedBy: workerName, claimedAt: taskData.claimedAt, claimPid: process.pid, status: "in_progress" };
+    } finally {
+      releaseTaskLock(handle);
     }
-    return freshTask;
   }
   return null;
 }
@@ -477,6 +578,125 @@ function logAuditEvent(workingDirectory, event) {
   appendFileWithMode(logPath, line);
 }
 
+// src/team/permissions.ts
+var import_node_path2 = require("node:path");
+function matchGlob(pattern, path) {
+  let pi = 0;
+  let si = 0;
+  let starPi = -1;
+  let starSi = -1;
+  while (si < path.length) {
+    if (pi < pattern.length - 1 && pattern[pi] === "*" && pattern[pi + 1] === "*") {
+      pi += 2;
+      if (pi < pattern.length && pattern[pi] === "/") pi++;
+      starPi = pi;
+      starSi = si;
+      continue;
+    }
+    if (pi < pattern.length && pattern[pi] === "*") {
+      pi++;
+      starPi = pi;
+      starSi = si;
+      continue;
+    }
+    if (pi < pattern.length && pattern[pi] === "?" && path[si] !== "/") {
+      pi++;
+      si++;
+      continue;
+    }
+    if (pi < pattern.length && pattern[pi] === path[si]) {
+      pi++;
+      si++;
+      continue;
+    }
+    if (starPi !== -1) {
+      pi = starPi;
+      starSi++;
+      si = starSi;
+      const wasSingleStar = starPi >= 2 && pattern[starPi - 2] === "*" && pattern[starPi - 1] === "*" ? false : starPi >= 1 && pattern[starPi - 1] === "*" ? true : false;
+      if (wasSingleStar && si > 0 && path[si - 1] === "/") {
+        return false;
+      }
+      continue;
+    }
+    return false;
+  }
+  while (pi < pattern.length) {
+    if (pattern[pi] === "*") {
+      pi++;
+    } else if (pattern[pi] === "/") {
+      pi++;
+    } else {
+      break;
+    }
+  }
+  return pi === pattern.length;
+}
+function isPathAllowed(permissions, filePath, workingDirectory) {
+  const absPath = (0, import_node_path2.resolve)(workingDirectory, filePath);
+  const relPath = (0, import_node_path2.relative)(workingDirectory, absPath);
+  if (relPath.startsWith("..")) return false;
+  for (const pattern of permissions.deniedPaths) {
+    if (matchGlob(pattern, relPath)) return false;
+  }
+  if (permissions.allowedPaths.length === 0) return true;
+  for (const pattern of permissions.allowedPaths) {
+    if (matchGlob(pattern, relPath)) return true;
+  }
+  return false;
+}
+function getDefaultPermissions(workerName) {
+  return {
+    workerName,
+    allowedPaths: [],
+    // empty = allow all
+    deniedPaths: [],
+    allowedCommands: [],
+    // empty = allow all
+    maxFileSize: Infinity
+  };
+}
+var SECURE_DENY_DEFAULTS = [
+  ".git/**",
+  ".env*",
+  "**/.env*",
+  "**/secrets/**",
+  "**/.ssh/**",
+  "**/node_modules/.cache/**"
+];
+function getEffectivePermissions(base) {
+  const perms = base ? { ...getDefaultPermissions(base.workerName), ...base } : getDefaultPermissions("default");
+  const existingSet = new Set(perms.deniedPaths);
+  const merged = [
+    ...SECURE_DENY_DEFAULTS.filter((p) => !existingSet.has(p)),
+    ...perms.deniedPaths
+  ];
+  perms.deniedPaths = merged;
+  return perms;
+}
+function findPermissionViolations(changedPaths, permissions, cwd) {
+  const violations = [];
+  for (const filePath of changedPaths) {
+    if (!isPathAllowed(permissions, filePath, cwd)) {
+      const absPath = (0, import_node_path2.resolve)(cwd, filePath);
+      const relPath = (0, import_node_path2.relative)(cwd, absPath);
+      let reason;
+      if (relPath.startsWith("..")) {
+        reason = `Path escapes working directory: ${relPath}`;
+      } else {
+        const matchedDeny = permissions.deniedPaths.find((p) => matchGlob(p, relPath));
+        if (matchedDeny) {
+          reason = `Matches denied pattern: ${matchedDeny}`;
+        } else {
+          reason = `Not in allowed paths: ${permissions.allowedPaths.join(", ") || "(none configured)"}`;
+        }
+      }
+      violations.push({ path: relPath, reason });
+    }
+  }
+  return violations;
+}
+
 // src/team/mcp-team-bridge.ts
 function log(message) {
   const ts = (/* @__PURE__ */ new Date()).toISOString();
@@ -496,7 +716,50 @@ function audit(config, eventType, taskId, details) {
   }
 }
 function sleep(ms) {
-  return new Promise((resolve4) => setTimeout(resolve4, ms));
+  return new Promise((resolve5) => setTimeout(resolve5, ms));
+}
+function captureFileSnapshot(cwd) {
+  const { execSync: execSync3 } = require("child_process");
+  const files = /* @__PURE__ */ new Set();
+  try {
+    const statusOutput = execSync3("git status --porcelain", { cwd, encoding: "utf-8", timeout: 1e4 });
+    for (const line of statusOutput.split("\n")) {
+      if (!line.trim()) continue;
+      const filePart = line.slice(3);
+      const arrowIdx = filePart.indexOf(" -> ");
+      const fileName = arrowIdx !== -1 ? filePart.slice(arrowIdx + 4) : filePart;
+      files.add(fileName.trim());
+    }
+    const untrackedOutput = execSync3("git ls-files --others --exclude-standard", { cwd, encoding: "utf-8", timeout: 1e4 });
+    for (const line of untrackedOutput.split("\n")) {
+      if (line.trim()) files.add(line.trim());
+    }
+  } catch {
+  }
+  return files;
+}
+function diffSnapshots(before, after) {
+  const changed = [];
+  for (const path of after) {
+    if (!before.has(path)) {
+      changed.push(path);
+    }
+  }
+  return changed;
+}
+function buildEffectivePermissions(config) {
+  if (config.permissions) {
+    return getEffectivePermissions({
+      workerName: config.workerName,
+      allowedPaths: config.permissions.allowedPaths || [],
+      deniedPaths: config.permissions.deniedPaths || [],
+      allowedCommands: config.permissions.allowedCommands || [],
+      maxFileSize: config.permissions.maxFileSize ?? Infinity
+    });
+  }
+  return getEffectivePermissions({
+    workerName: config.workerName
+  });
 }
 var MAX_BUFFER_SIZE = 10 * 1024 * 1024;
 var INBOX_ROTATION_THRESHOLD = 10 * 1024 * 1024;
@@ -674,7 +937,7 @@ function spawnCliProcess(provider, prompt, model, cwd, timeoutMs) {
     cwd,
     ...process.platform === "win32" ? { shell: true } : {}
   });
-  const result = new Promise((resolve4, reject) => {
+  const result = new Promise((resolve5, reject) => {
     let stdout = "";
     let stderr = "";
     let settled = false;
@@ -697,7 +960,7 @@ function spawnCliProcess(provider, prompt, model, cwd, timeoutMs) {
         clearTimeout(timeoutHandle);
         if (code === 0) {
           const response = provider === "codex" ? parseCodexOutput(stdout) : stdout.trim();
-          resolve4(response);
+          resolve5(response);
         } else {
           const detail = stderr || stdout.trim() || "No output";
           reject(new Error(`CLI exited with code ${code}: ${detail}`));
@@ -734,7 +997,7 @@ async function handleShutdown(config, signal, activeChild) {
     });
     activeChild.kill("SIGTERM");
     await Promise.race([
-      new Promise((resolve4) => activeChild.on("close", () => resolve4())),
+      new Promise((resolve5) => activeChild.on("close", () => resolve5())),
       sleep(5e3)
     ]);
     if (!closed) {
@@ -823,6 +1086,11 @@ async function runBridge(config) {
         const outputFile = getOutputPath(config, task.id);
         log(`[bridge] Executing task ${task.id}: ${task.subject}`);
         try {
+          const enforcementMode = config.permissionEnforcement || "off";
+          let preSnapshot = null;
+          if (enforcementMode !== "off") {
+            preSnapshot = captureFileSnapshot(workingDirectory);
+          }
           const { child, result } = spawnCliProcess(
             provider,
             prompt,
@@ -835,17 +1103,73 @@ async function runBridge(config) {
           const response = await result;
           activeChild = null;
           writeFileWithMode(outputFile, response);
-          updateTask(teamName, task.id, { status: "completed" });
-          audit(config, "task_completed", task.id);
-          consecutiveErrors = 0;
-          const summary = readOutputSummary(outputFile);
-          appendOutbox(teamName, workerName, {
-            type: "task_complete",
-            taskId: task.id,
-            summary,
-            timestamp: (/* @__PURE__ */ new Date()).toISOString()
-          });
-          log(`[bridge] Task ${task.id} completed`);
+          let violations = [];
+          if (enforcementMode !== "off" && preSnapshot) {
+            const postSnapshot = captureFileSnapshot(workingDirectory);
+            const changedPaths = diffSnapshots(preSnapshot, postSnapshot);
+            if (changedPaths.length > 0) {
+              const effectivePerms = buildEffectivePermissions(config);
+              violations = findPermissionViolations(changedPaths, effectivePerms, workingDirectory);
+            }
+          }
+          if (violations.length > 0) {
+            const violationSummary = violations.map((v) => `  - ${v.path}: ${v.reason}`).join("\n");
+            if (enforcementMode === "enforce") {
+              audit(config, "permission_violation", task.id, {
+                violations: violations.map((v) => ({ path: v.path, reason: v.reason })),
+                mode: "enforce"
+              });
+              updateTask(teamName, task.id, {
+                status: "completed",
+                metadata: {
+                  ...task.metadata || {},
+                  error: `Permission violations detected (enforce mode)`,
+                  permissionViolations: violations,
+                  permanentlyFailed: true
+                }
+              });
+              appendOutbox(teamName, workerName, {
+                type: "error",
+                taskId: task.id,
+                error: `Permission violation (enforce mode):
+${violationSummary}`,
+                timestamp: (/* @__PURE__ */ new Date()).toISOString()
+              });
+              log(`[bridge] Task ${task.id} failed: permission violations (enforce mode)`);
+              consecutiveErrors = 0;
+            } else {
+              audit(config, "permission_audit", task.id, {
+                violations: violations.map((v) => ({ path: v.path, reason: v.reason })),
+                mode: "audit"
+              });
+              log(`[bridge] Permission audit warning for task ${task.id}:
+${violationSummary}`);
+              updateTask(teamName, task.id, { status: "completed" });
+              audit(config, "task_completed", task.id);
+              consecutiveErrors = 0;
+              const summary = readOutputSummary(outputFile);
+              appendOutbox(teamName, workerName, {
+                type: "task_complete",
+                taskId: task.id,
+                summary: `${summary}
+[AUDIT WARNING: ${violations.length} permission violation(s) detected]`,
+                timestamp: (/* @__PURE__ */ new Date()).toISOString()
+              });
+              log(`[bridge] Task ${task.id} completed (with ${violations.length} audit warning(s))`);
+            }
+          } else {
+            updateTask(teamName, task.id, { status: "completed" });
+            audit(config, "task_completed", task.id);
+            consecutiveErrors = 0;
+            const summary = readOutputSummary(outputFile);
+            appendOutbox(teamName, workerName, {
+              type: "task_complete",
+              taskId: task.id,
+              summary,
+              timestamp: (/* @__PURE__ */ new Date()).toISOString()
+            });
+            log(`[bridge] Task ${task.id} completed`);
+          }
         } catch (err) {
           activeChild = null;
           consecutiveErrors++;
@@ -1008,11 +1332,41 @@ function main() {
     console.error(`[bridge] Invalid workingDirectory: ${err.message}`);
     process.exit(1);
   }
+  if (config.permissionEnforcement) {
+    const validModes = ["off", "audit", "enforce"];
+    if (!validModes.includes(config.permissionEnforcement)) {
+      console.error(`Invalid permissionEnforcement: ${config.permissionEnforcement}. Must be 'off', 'audit', or 'enforce'.`);
+      process.exit(1);
+    }
+    if (config.permissionEnforcement !== "off" && config.permissions) {
+      const p = config.permissions;
+      if (p.allowedPaths && !Array.isArray(p.allowedPaths)) {
+        console.error("permissions.allowedPaths must be an array of strings");
+        process.exit(1);
+      }
+      if (p.deniedPaths && !Array.isArray(p.deniedPaths)) {
+        console.error("permissions.deniedPaths must be an array of strings");
+        process.exit(1);
+      }
+      if (p.allowedCommands && !Array.isArray(p.allowedCommands)) {
+        console.error("permissions.allowedCommands must be an array of strings");
+        process.exit(1);
+      }
+      const dangerousPatterns = ["**", "*", "!.git/**", "!.env*", "!**/.env*"];
+      for (const pattern of p.allowedPaths || []) {
+        if (dangerousPatterns.includes(pattern)) {
+          console.error(`Dangerous allowedPaths pattern rejected: "${pattern}"`);
+          process.exit(1);
+        }
+      }
+    }
+  }
   config.pollIntervalMs = config.pollIntervalMs || 3e3;
   config.taskTimeoutMs = config.taskTimeoutMs || 6e5;
   config.maxConsecutiveErrors = config.maxConsecutiveErrors || 3;
   config.outboxMaxLines = config.outboxMaxLines || 500;
   config.maxRetries = config.maxRetries || 5;
+  config.permissionEnforcement = config.permissionEnforcement || "off";
   for (const sig of ["SIGINT", "SIGTERM"]) {
     process.on(sig, () => {
       console.error(`[bridge] Received ${sig}, shutting down...`);

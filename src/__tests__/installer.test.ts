@@ -87,7 +87,6 @@ describe('Installer Constants', () => {
     it('should contain expected core agents', () => {
       const expectedAgents = [
         'architect.md',
-        'researcher.md',
         'explore.md',
         'designer.md',
         'writer.md',
@@ -97,6 +96,8 @@ describe('Installer Constants', () => {
         'executor.md',
         'planner.md',
         'qa-tester.md',
+        'debugger.md',
+        'verifier.md',
       ];
 
       for (const agent of expectedAgents) {
@@ -106,21 +107,6 @@ describe('Installer Constants', () => {
       }
     });
 
-    it('should contain tiered agent variants', () => {
-      const tieredAgents = [
-        'architect-medium.md',
-        'architect-low.md',
-        'executor-high.md',
-        'executor-low.md',
-        'designer-low.md',
-        'designer-high.md',
-      ];
-
-      for (const agent of tieredAgents) {
-        expect(AGENT_DEFINITIONS).toHaveProperty(agent);
-        expect(typeof AGENT_DEFINITIONS[agent]).toBe('string');
-      }
-    });
 
     it('should have valid frontmatter for each agent', () => {
       for (const [filename, content] of Object.entries(AGENT_DEFINITIONS)) {
@@ -161,20 +147,25 @@ describe('Installer Constants', () => {
     it('should have consistent model assignments', () => {
       const modelExpectations: Record<string, string> = {
         'architect.md': 'opus',
-        'architect-medium.md': 'sonnet',
-        'architect-low.md': 'haiku',
         'executor.md': 'sonnet',
-        'executor-high.md': 'opus',
-        'executor-low.md': 'haiku',
         'designer.md': 'sonnet',
-        'designer-low.md': 'haiku',
-        'designer-high.md': 'opus',
         'writer.md': 'haiku',
         'vision.md': 'sonnet',
         'critic.md': 'opus',
         'analyst.md': 'opus',
         'planner.md': 'opus',
         'qa-tester.md': 'sonnet',
+        'debugger.md': 'sonnet',
+        'verifier.md': 'sonnet',
+        'style-reviewer.md': 'haiku',
+        'quality-reviewer.md': 'opus',
+        'api-reviewer.md': 'sonnet',
+        'performance-reviewer.md': 'sonnet',
+        'test-engineer.md': 'sonnet',
+        'security-reviewer.md': 'opus',
+        'build-fixer.md': 'sonnet',
+        'git-master.md': 'sonnet',
+        'deep-executor.md': 'opus',
       };
 
       for (const [filename, expectedModel] of Object.entries(modelExpectations)) {
@@ -246,7 +237,7 @@ describe('Installer Constants', () => {
       const essentialSections = [
         'Multi-Agent Orchestration',
         'Delegation-First Philosophy',
-        'All Skills',
+        'Skills',
         'Cancellation',
       ];
 
@@ -273,14 +264,12 @@ describe('Installer Constants', () => {
       }
     });
 
-    it('should include tiered agent routing table', () => {
-      // Verify the Smart Model Routing section exists with model names
-      expect(CLAUDE_MD_CONTENT).toContain('Smart Model Routing');
+    it('should include adaptive model routing', () => {
+      // Verify the Adaptive Model Routing section exists with model names
+      expect(CLAUDE_MD_CONTENT).toContain('Adaptive Model Routing');
       expect(CLAUDE_MD_CONTENT).toContain('haiku');
       expect(CLAUDE_MD_CONTENT).toContain('sonnet');
       expect(CLAUDE_MD_CONTENT).toContain('opus');
-      // Agent tiers are now inline in the Agent Tier Matrix section
-      expect(CLAUDE_MD_CONTENT).toContain('Agent Tier Matrix');
     });
 
     it('should document magic keywords and compatibility commands', () => {
@@ -297,7 +286,7 @@ describe('Installer Constants', () => {
       }
 
       // Verify skills section exists with trigger patterns
-      expect(CLAUDE_MD_CONTENT).toContain('All Skills');
+      expect(CLAUDE_MD_CONTENT).toContain('Skills');
       expect(CLAUDE_MD_CONTENT).toContain('Trigger');
     });
 
@@ -400,7 +389,7 @@ describe('Installer Constants', () => {
     });
 
     it('should have read-only agents not include Edit/Write tools', () => {
-      const readOnlyAgents = ['architect.md', 'architect-medium.md', 'architect-low.md', 'critic.md', 'analyst.md'];
+      const readOnlyAgents = ['architect.md', 'critic.md', 'analyst.md'];
 
       for (const agent of readOnlyAgents) {
         const content = AGENT_DEFINITIONS[agent];
@@ -417,8 +406,6 @@ describe('Installer Constants', () => {
     it('should have implementation agents include Edit/Write tools', () => {
       const implementationAgents = [
         'executor.md',
-        'executor-high.md',
-        'executor-low.md',
         'designer.md',
         'writer.md',
       ];
@@ -532,11 +519,16 @@ describe('Installer Constants', () => {
 
       // Note: "TODO" appears intentionally in "Todo_Discipline", "TodoWrite" tool, and "TODO OBSESSION"
       // These are legitimate uses, not placeholder text to be filled in later
-      const placeholders = ['FIXME', 'XXX', '[placeholder]', 'TBD'];
+      const placeholders = ['FIXME', 'XXX', '[placeholder]'];
+      // TBD checked with word boundary to avoid matching "JTBD" (Jobs To Be Done)
+      const wordBoundaryPlaceholders = [/\bTBD\b/];
 
       for (const content of allContent) {
         for (const placeholder of placeholders) {
           expect(content).not.toContain(placeholder);
+        }
+        for (const pattern of wordBoundaryPlaceholders) {
+          expect(pattern.test(content as string)).toBe(false);
         }
 
         // Check for standalone TODO that looks like a placeholder

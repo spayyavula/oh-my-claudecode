@@ -24,6 +24,22 @@ export declare function isModelError(output: string): {
     message: string;
 };
 /**
+ * Check if an error message or output indicates a rate-limit (429) error
+ * that should trigger a fallback to the next model in the chain.
+ */
+export declare function isRateLimitError(output: string, stderr?: string): {
+    isError: boolean;
+    message: string;
+};
+/**
+ * Check if an error is retryable (model error OR rate limit error)
+ */
+export declare function isRetryableError(output: string, stderr?: string): {
+    isError: boolean;
+    message: string;
+    type: 'model' | 'rate_limit' | 'none';
+};
+/**
  * Parse Codex JSONL output to extract the final text response
  *
  * Codex CLI (--json mode) emits JSONL events. We extract text from:

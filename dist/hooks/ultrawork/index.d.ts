@@ -25,6 +25,9 @@ export interface UltraworkState {
 }
 /**
  * Read Ultrawork state from disk (local only)
+ *
+ * When sessionId is provided, ONLY reads session-scoped file — no legacy fallback.
+ * This prevents cross-session state leakage.
  */
 export declare function readUltraworkState(directory?: string, sessionId?: string): UltraworkState | null;
 /**
@@ -37,6 +40,11 @@ export declare function writeUltraworkState(state: UltraworkState, directory?: s
 export declare function activateUltrawork(prompt: string, sessionId?: string, directory?: string, linkedToRalph?: boolean): boolean;
 /**
  * Deactivate ultrawork mode
+ *
+ * When sessionId is provided:
+ * 1. Deletes the session-scoped state file
+ * 2. Cleans up ghost legacy files that belong to this session (or have no session_id)
+ *    to prevent stale legacy files from leaking into other sessions.
  */
 export declare function deactivateUltrawork(directory?: string, sessionId?: string): boolean;
 /**

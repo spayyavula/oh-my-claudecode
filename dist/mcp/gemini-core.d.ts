@@ -21,13 +21,23 @@ export declare const GEMINI_VALID_ROLES: readonly ["designer", "writer", "vision
 export declare const MAX_CONTEXT_FILES = 20;
 export declare const MAX_FILE_SIZE: number;
 /**
+ * Check if Gemini output/stderr indicates a rate-limit (429) or quota error
+ * that should trigger a fallback to the next model in the chain.
+ */
+export declare function isGeminiRetryableError(stdout: string, stderr?: string): {
+    isError: boolean;
+    message: string;
+    type: 'rate_limit' | 'model' | 'none';
+};
+/**
  * Execute Gemini CLI command and return the response
  */
 export declare function executeGemini(prompt: string, model?: string, cwd?: string): Promise<string>;
 /**
- * Execute Gemini CLI in background (single model, no fallback chain)
+ * Execute Gemini CLI in background with fallback chain support
+ * Retries with next model on model errors and 429/rate-limit errors
  */
-export declare function executeGeminiBackground(fullPrompt: string, model: string, jobMeta: BackgroundJobMeta, workingDirectory?: string): {
+export declare function executeGeminiBackground(fullPrompt: string, modelInput: string | undefined, jobMeta: BackgroundJobMeta, workingDirectory?: string): {
     pid: number;
 } | {
     error: string;

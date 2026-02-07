@@ -58,8 +58,9 @@ export declare function getGlobalStateFilePath(mode: ExecutionMode): string | nu
 export declare function isModeActive(mode: ExecutionMode, cwd: string, sessionId?: string): boolean;
 /**
  * Check if a mode has active state (file exists)
+ * @param sessionId - When provided, checks session-scoped path only (no legacy fallback)
  */
-export declare function hasModeState(cwd: string, mode: ExecutionMode): boolean;
+export declare function hasModeState(cwd: string, mode: ExecutionMode, sessionId?: string): boolean;
 /**
  * Get all modes that currently have state files
  */

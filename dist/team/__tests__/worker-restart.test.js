@@ -98,7 +98,7 @@ describe('worker-restart', () => {
             expect(config.provider).toBe('codex');
             expect(config.model).toBe('gpt-5.3-codex');
             expect(config.pollIntervalMs).toBe(3000);
-            expect(config.taskTimeoutMs).toBe(300000);
+            expect(config.taskTimeoutMs).toBe(600000);
             expect(config.maxConsecutiveErrors).toBe(3);
         });
         it('handles gemini worker', () => {

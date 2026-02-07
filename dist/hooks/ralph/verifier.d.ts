@@ -31,24 +31,26 @@ export interface VerificationState {
 }
 /**
  * Read verification state
+ * @param sessionId - When provided, reads from session-scoped path only (no legacy fallback)
  */
-export declare function readVerificationState(directory: string): VerificationState | null;
+export declare function readVerificationState(directory: string, sessionId?: string): VerificationState | null;
 /**
  * Write verification state
  */
-export declare function writeVerificationState(directory: string, state: VerificationState): boolean;
+export declare function writeVerificationState(directory: string, state: VerificationState, sessionId?: string): boolean;
 /**
  * Clear verification state
+ * @param sessionId - When provided, clears session-scoped state only
  */
-export declare function clearVerificationState(directory: string): boolean;
+export declare function clearVerificationState(directory: string, sessionId?: string): boolean;
 /**
  * Start verification process
  */
-export declare function startVerification(directory: string, completionClaim: string, originalTask: string): VerificationState;
+export declare function startVerification(directory: string, completionClaim: string, originalTask: string, sessionId?: string): VerificationState;
 /**
  * Record architect feedback
  */
-export declare function recordArchitectFeedback(directory: string, approved: boolean, feedback: string): VerificationState | null;
+export declare function recordArchitectFeedback(directory: string, approved: boolean, feedback: string, sessionId?: string): VerificationState | null;
 /**
  * Generate architect verification prompt
  */

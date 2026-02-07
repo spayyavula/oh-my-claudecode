@@ -14355,6 +14355,39 @@ function isModelError(output) {
   }
   return { isError: false, message: "" };
 }
+function isRateLimitError(output, stderr = "") {
+  const combined = `${output}
+${stderr}`;
+  if (/429|rate.?limit|too many requests|quota.?exceeded|resource.?exhausted/i.test(combined)) {
+    const lines = combined.split("\n").filter((l) => l.trim());
+    for (const line of lines) {
+      try {
+        const event = JSON.parse(line);
+        const msg = typeof event.message === "string" ? event.message : typeof event.error?.message === "string" ? event.error.message : "";
+        if (/429|rate.?limit|too many requests|quota.?exceeded|resource.?exhausted/i.test(msg)) {
+          return { isError: true, message: msg };
+        }
+      } catch {
+      }
+      if (/429|rate.?limit|too many requests|quota.?exceeded|resource.?exhausted/i.test(line)) {
+        return { isError: true, message: line.trim() };
+      }
+    }
+    return { isError: true, message: "Rate limit error detected" };
+  }
+  return { isError: false, message: "" };
+}
+function isRetryableError(output, stderr = "") {
+  const modelErr = isModelError(output);
+  if (modelErr.isError) {
+    return { isError: true, message: modelErr.message, type: "model" };
+  }
+  const rateErr = isRateLimitError(output, stderr);
+  if (rateErr.isError) {
+    return { isError: true, message: rateErr.message, type: "rate_limit" };
+  }
+  return { isError: false, message: "", type: "none" };
+}
 function parseCodexOutput(output) {
   const lines = output.trim().split("\n").filter((l) => l.trim());
   const messages = [];
@@ -14418,14 +14451,19 @@ function executeCodex(prompt, model, cwd) {
         settled = true;
         clearTimeout(timeoutHandle);
         if (code === 0 || stdout.trim()) {
-          const modelErr = isModelError(stdout);
-          if (modelErr.isError) {
-            reject(new Error(`Codex model error: ${modelErr.message}`));
+          const retryable = isRetryableError(stdout, stderr);
+          if (retryable.isError) {
+            reject(new Error(`Codex ${retryable.type === "rate_limit" ? "rate limit" : "model"} error: ${retryable.message}`));
           } else {
             resolve5(parseCodexOutput(stdout));
           }
         } else {
-          reject(new Error(`Codex exited with code ${code}: ${stderr || "No output"}`));
+          const retryableExit = isRateLimitError(stderr, stdout);
+          if (retryableExit.isError) {
+            reject(new Error(`Codex rate limit error: ${retryableExit.message}`));
+          } else {
+            reject(new Error(`Codex exited with code ${code}: ${stderr || "No output"}`));
+          }
         }
       }
     });
@@ -14468,7 +14506,7 @@ async function executeCodexWithFallback(prompt, model, cwd) {
       };
     } catch (err) {
       lastError = err;
-      if (!/model error|model_not_found|model is not supported/i.test(lastError.message)) {
+      if (!/model error|model_not_found|model is not supported|429|rate.?limit|too many requests|quota.?exceeded|resource.?exhausted/i.test(lastError.message)) {
         throw lastError;
       }
     }
@@ -14559,8 +14597,8 @@ function executeCodexBackground(fullPrompt, modelInput, jobMeta, workingDirector
           return;
         }
         if (code === 0 || stdout.trim()) {
-          const modelErr = isModelError(stdout);
-          if (modelErr.isError && remainingModels.length > 0) {
+          const retryableErr = isRetryableError(stdout, stderr);
+          if (retryableErr.isError && remainingModels.length > 0) {
             const nextModel = remainingModels[0];
             const newRemainingModels = remainingModels.slice(1);
             const retryResult = trySpawnWithModel(nextModel, newRemainingModels);
@@ -14574,12 +14612,12 @@ function executeCodexBackground(fullPrompt, modelInput, jobMeta, workingDirector
             }
             return;
           }
-          if (modelErr.isError) {
+          if (retryableErr.isError) {
             writeJobStatus({
               ...initialStatus,
               status: "failed",
               completedAt: (/* @__PURE__ */ new Date()).toISOString(),
-              error: `All models in fallback chain failed. Last error: ${modelErr.message}`
+              error: `All models in fallback chain failed. Last error (${retryableErr.type}): ${retryableErr.message}`
             }, workingDirectory);
             return;
           }
@@ -14605,6 +14643,21 @@ function executeCodexBackground(fullPrompt, modelInput, jobMeta, workingDirector
             fallbackModel: usedFallback ? tryModel : void 0
           }, workingDirectory);
         } else {
+          const retryableExit = isRetryableError(stderr, stdout);
+          if (retryableExit.isError && remainingModels.length > 0) {
+            const nextModel = remainingModels[0];
+            const newRemainingModels = remainingModels.slice(1);
+            const retryResult = trySpawnWithModel(nextModel, newRemainingModels);
+            if ("error" in retryResult) {
+              writeJobStatus({
+                ...initialStatus,
+                status: "failed",
+                completedAt: (/* @__PURE__ */ new Date()).toISOString(),
+                error: `Fallback spawn failed for model ${nextModel}: ${retryResult.error}`
+              }, workingDirectory);
+            }
+            return;
+          }
           writeJobStatus({
             ...initialStatus,
             status: "failed",

@@ -8,12 +8,20 @@ export declare function appendOutbox(teamName: string, workerName: string, messa
  * Rotate outbox if it exceeds maxLines.
  * Keeps the most recent maxLines/2 entries, discards older.
  * Prevents unbounded growth.
+ *
+ * NOTE: Rotation events are not audit-logged here to avoid circular dependency
+ * on audit-log.ts. The caller (e.g., mcp-team-bridge.ts) should log rotation
+ * events using the 'outbox_rotated' audit event type after calling this function.
  */
 export declare function rotateOutboxIfNeeded(teamName: string, workerName: string, maxLines: number): void;
 /**
  * Rotate inbox if it exceeds maxSizeBytes.
  * Keeps the most recent half of lines, discards older.
  * Prevents unbounded growth of inbox files.
+ *
+ * NOTE: Rotation events are not audit-logged here to avoid circular dependency
+ * on audit-log.ts. The caller (e.g., mcp-team-bridge.ts) should log rotation
+ * events using the 'inbox_rotated' audit event type after calling this function.
  */
 export declare function rotateInboxIfNeeded(teamName: string, workerName: string, maxSizeBytes: number): void;
 /**

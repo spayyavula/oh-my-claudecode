@@ -91,10 +91,10 @@ export function synthesizeBridgeConfig(worker, teamName) {
         provider: worker.agentType.replace('mcp-', ''),
         model: worker.model,
         pollIntervalMs: 3000,
-        taskTimeoutMs: 300000,
+        taskTimeoutMs: 600000,
         maxConsecutiveErrors: 3,
         outboxMaxLines: 500,
-        maxRetries: 3,
+        maxRetries: 5,
     };
 }
 //# sourceMappingURL=worker-restart.js.map

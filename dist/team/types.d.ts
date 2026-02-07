@@ -15,6 +15,15 @@ export interface BridgeConfig {
     maxConsecutiveErrors: number;
     outboxMaxLines: number;
     maxRetries?: number;
+    permissionEnforcement?: 'off' | 'audit' | 'enforce';
+    permissions?: BridgeWorkerPermissions;
+}
+/** Permission scoping embedded in BridgeConfig (mirrors WorkerPermissions shape) */
+export interface BridgeWorkerPermissions {
+    allowedPaths: string[];
+    deniedPaths: string[];
+    allowedCommands: string[];
+    maxFileSize: number;
 }
 /** Mirrors the JSON structure of ~/.claude/tasks/{team}/{id}.json */
 export interface TaskFile {
@@ -106,4 +115,8 @@ export interface TaskFailureSidecar {
     retryCount: number;
     lastFailedAt: string;
 }
+/** Worker backend type */
+export type WorkerBackend = 'claude-native' | 'mcp-codex' | 'mcp-gemini';
+/** Worker capability tag */
+export type WorkerCapability = 'code-edit' | 'code-review' | 'security-review' | 'architecture' | 'testing' | 'documentation' | 'ui-design' | 'refactoring' | 'research' | 'general';
 //# sourceMappingURL=types.d.ts.map

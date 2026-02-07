@@ -114,9 +114,6 @@ export { MODE_CONFIGS, getStateDir, ensureStateDir as ensureModeStateDir, getSta
 // Additional functions from PR #111
 isModeActive, getActiveExclusiveMode, canStartMode, getAllModeStatuses, createModeMarker, removeModeMarker, readModeMarker } from './mode-registry/index.js';
 export { 
-// Swarm Coordination
-startSwarm, stopSwarm, getSwarmStatus, getSwarmStats, claimTask, releaseTask, completeTask, failTask, heartbeat, cleanupStaleClaims, hasPendingWork, isSwarmComplete, getActiveAgents, getAllTasks, getTasksWithStatus, getTaskById, getAgentTasks, getAllHeartbeats, retryTask, isSwarmReady, connectToSwarm, disconnectFromSwarm, isSwarmActive, cancelSwarm, DEFAULT_SWARM_CONFIG } from './swarm/index.js';
-export { 
 // Setup Hook
 ensureDirectoryStructure, validateConfigFiles, setEnvironmentVariables, processSetupInit, pruneOldStateFiles, cleanupOrphanedState, vacuumSwarmDb, processSetupMaintenance, processSetup } from './setup/index.js';
 export { 

@@ -15,11 +15,28 @@ import { sanitizeName } from './tmux-session.js';
 /**
  * Validate that a config path is under the user's home directory
  * and contains a trusted subpath (/.claude/ or /.omc/).
+ * Resolves the path first to defeat traversal attacks like ~/foo/.claude/../../evil.json.
  */
 export function validateConfigPath(configPath, homeDir) {
-    const isUnderHome = configPath.startsWith(homeDir + '/') || configPath === homeDir;
-    const isTrustedSubpath = configPath.includes('/.claude/') || configPath.includes('/.omc/');
-    return isUnderHome && isTrustedSubpath;
+    // Resolve to canonical absolute path to defeat ".." traversal
+    const resolved = resolve(configPath);
+    const isUnderHome = resolved.startsWith(homeDir + '/') || resolved === homeDir;
+    const isTrustedSubpath = resolved.includes('/.claude/') || resolved.includes('/.omc/');
+    if (!isUnderHome || !isTrustedSubpath)
+        return false;
+    // Additionally verify via realpathSync on the parent directory (if it exists)
+    // to defeat symlink attacks where the parent is a symlink outside home
+    try {
+        const parentDir = resolve(resolved, '..');
+        const realParent = realpathSync(parentDir);
+        if (!realParent.startsWith(homeDir + '/') && realParent !== homeDir) {
+            return false;
+        }
+    }
+    catch {
+        // Parent directory doesn't exist yet — allow (file may be about to be created)
+    }
+    return true;
 }
 /**
  * Validate the bridge working directory is safe:
@@ -98,12 +115,45 @@ function main() {
         console.error(`[bridge] Invalid workingDirectory: ${err.message}`);
         process.exit(1);
     }
+    // Validate permission enforcement config
+    if (config.permissionEnforcement) {
+        const validModes = ['off', 'audit', 'enforce'];
+        if (!validModes.includes(config.permissionEnforcement)) {
+            console.error(`Invalid permissionEnforcement: ${config.permissionEnforcement}. Must be 'off', 'audit', or 'enforce'.`);
+            process.exit(1);
+        }
+        // Validate permissions shape when enforcement is active
+        if (config.permissionEnforcement !== 'off' && config.permissions) {
+            const p = config.permissions;
+            if (p.allowedPaths && !Array.isArray(p.allowedPaths)) {
+                console.error('permissions.allowedPaths must be an array of strings');
+                process.exit(1);
+            }
+            if (p.deniedPaths && !Array.isArray(p.deniedPaths)) {
+                console.error('permissions.deniedPaths must be an array of strings');
+                process.exit(1);
+            }
+            if (p.allowedCommands && !Array.isArray(p.allowedCommands)) {
+                console.error('permissions.allowedCommands must be an array of strings');
+                process.exit(1);
+            }
+            // Reject dangerous patterns that could defeat the deny-defaults
+            const dangerousPatterns = ['**', '*', '!.git/**', '!.env*', '!**/.env*'];
+            for (const pattern of (p.allowedPaths || [])) {
+                if (dangerousPatterns.includes(pattern)) {
+                    console.error(`Dangerous allowedPaths pattern rejected: "${pattern}"`);
+                    process.exit(1);
+                }
+            }
+        }
+    }
     // Apply defaults
     config.pollIntervalMs = config.pollIntervalMs || 3000;
     config.taskTimeoutMs = config.taskTimeoutMs || 600_000;
     config.maxConsecutiveErrors = config.maxConsecutiveErrors || 3;
     config.outboxMaxLines = config.outboxMaxLines || 500;
     config.maxRetries = config.maxRetries || 5;
+    config.permissionEnforcement = config.permissionEnforcement || 'off';
     // Signal handlers for graceful cleanup on external termination
     for (const sig of ['SIGINT', 'SIGTERM']) {
         process.on(sig, () => {
@@ -122,7 +172,8 @@ function main() {
         process.exit(1);
     });
 }
-// Only run main if this file is the entry point (not imported for testing)
+// Only run main if this file is the entry point (not imported for testing).
+// Note: require.main === module is correct here - this file is bundled to CJS by esbuild.
 if (require.main === module) {
     main();
 }

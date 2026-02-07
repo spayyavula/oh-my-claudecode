@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync, readFileSync
 import { tmpdir } from 'os';
 import { join } from 'path';
 // Import functions to test
-import { getStateFilePath, isModeActive, clearModeState, isModeActiveInAnySession, getActiveSessionsForMode, clearStaleSessionDirs, } from '../index.js';
+import { getStateFilePath, isModeActive, clearModeState, hasModeState, isModeActiveInAnySession, getActiveSessionsForMode, clearStaleSessionDirs, } from '../index.js';
 import { validateSessionId, resolveSessionStatePath, listSessionIds, } from '../../../lib/worktree-paths.js';
 describe('Session-Scoped State Isolation', () => {
     let tempDir;
@@ -153,6 +153,40 @@ describe('Session-Scoped State Isolation', () => {
             expect(isModeActive('ultrawork', tempDir, 'session-A')).toBe(false);
             // Without sessionId, should see legacy state (active: true)
             expect(isModeActive('ultrawork', tempDir)).toBe(true);
+        });
+    });
+    describe('Session isolation: no legacy fallback with sessionId (Issue #311)', () => {
+        it('isJsonModeActive with sessionId should ignore legacy file entirely', () => {
+            // Only legacy file exists, no session-scoped file
+            createLegacyState('ultrawork', { active: true, session_id: 'session-A' });
+            // Session B should NOT see session A's legacy state
+            expect(isModeActive('ultrawork', tempDir, 'session-B')).toBe(false);
+            // Session A should also NOT see its own legacy state (must use session-scoped file)
+            expect(isModeActive('ultrawork', tempDir, 'session-A')).toBe(false);
+            // Without sessionId, legacy state is still visible (backward compat)
+            expect(isModeActive('ultrawork', tempDir)).toBe(true);
+        });
+        it('should reject state with mismatched session_id even in session-scoped file', () => {
+            // Create session-scoped file with wrong session_id (shouldn't happen, but defensive)
+            createSessionState('session-A', 'ultrawork', { active: true, session_id: 'session-OTHER' });
+            expect(isModeActive('ultrawork', tempDir, 'session-A')).toBe(false);
+        });
+        it('hasModeState with sessionId should check session path only', () => {
+            createLegacyState('ecomode', { active: true });
+            // Without sessionId, legacy file is found
+            expect(hasModeState(tempDir, 'ecomode')).toBe(true);
+            // With sessionId, only session-scoped path is checked (doesn't exist)
+            expect(hasModeState(tempDir, 'ecomode', 'session-X')).toBe(false);
+            // Create session-scoped file, now it should be found
+            createSessionState('session-X', 'ecomode', { active: true });
+            expect(hasModeState(tempDir, 'ecomode', 'session-X')).toBe(true);
+        });
+        it('cross-session: Session A active, Session B check returns false', () => {
+            createSessionState('session-A', 'ralph', { active: true, session_id: 'session-A' });
+            // Session A sees its own state
+            expect(isModeActive('ralph', tempDir, 'session-A')).toBe(true);
+            // Session B does NOT see Session A's state
+            expect(isModeActive('ralph', tempDir, 'session-B')).toBe(false);
         });
     });
 });

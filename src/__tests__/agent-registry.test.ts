@@ -11,7 +11,7 @@ describe('Agent Registry Validation', () => {
   test('agent count matches documentation', () => {
     const agentsDir = path.join(__dirname, '../../agents');
     const promptFiles = fs.readdirSync(agentsDir).filter((file) => file.endsWith('.md') && file !== 'AGENTS.md');
-    expect(promptFiles.length).toBe(28);
+    expect(promptFiles.length).toBe(30);
   });
 
   test('all agents have .md prompt files', () => {
@@ -27,7 +27,9 @@ describe('Agent Registry Validation', () => {
   test('all registry agents are exported from index.ts', async () => {
     const registryAgents = Object.keys(getAgentDefinitions());
     const exports = await import('../agents/index.js') as Record<string, unknown>;
+    const deprecatedAliases = ['researcher', 'tdd-guide'];
     for (const name of registryAgents) {
+      if (deprecatedAliases.includes(name)) continue;
       const exportName = name.replace(/-([a-z])/g, (_: string, c: string) => c.toUpperCase()) + 'Agent';
       expect(exports[exportName], `Missing export for agent: ${name} (expected ${exportName})`).toBeDefined();
     }

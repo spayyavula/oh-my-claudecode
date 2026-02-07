@@ -6,7 +6,7 @@
  * Automatic rotation when log exceeds size threshold.
  */
 import { join } from 'node:path';
-import { existsSync, readFileSync, statSync, renameSync, writeFileSync, chmodSync } from 'node:fs';
+import { existsSync, readFileSync, statSync, renameSync, writeFileSync, lstatSync, unlinkSync } from 'node:fs';
 import { appendFileWithMode, ensureDirWithMode, validateResolvedPath } from './fs-utils.js';
 const DEFAULT_MAX_LOG_SIZE = 5 * 1024 * 1024; // 5MB
 function getLogPath(workingDirectory, teamName) {
@@ -33,24 +33,29 @@ export function readAuditLog(workingDirectory, teamName, filter) {
         return [];
     const content = readFileSync(logPath, 'utf-8');
     const lines = content.split('\n').filter(l => l.trim());
-    let events = [];
+    const maxResults = filter?.limit;
+    const events = [];
     for (const line of lines) {
+        let event;
         try {
-            events.push(JSON.parse(line));
+            event = JSON.parse(line);
         }
-        catch { /* skip malformed */ }
-    }
-    if (filter) {
-        if (filter.eventType) {
-            events = events.filter(e => e.eventType === filter.eventType);
+        catch {
+            continue; /* skip malformed */
         }
-        if (filter.workerName) {
-            events = events.filter(e => e.workerName === filter.workerName);
+        // Apply filters inline for early-exit optimization
+        if (filter) {
+            if (filter.eventType && event.eventType !== filter.eventType)
+                continue;
+            if (filter.workerName && event.workerName !== filter.workerName)
+                continue;
+            if (filter.since && event.timestamp < filter.since)
+                continue;
         }
-        if (filter.since) {
-            const since = filter.since;
-            events = events.filter(e => e.timestamp >= since);
-        }
+        events.push(event);
+        // Early exit when limit is reached
+        if (maxResults !== undefined && events.length >= maxResults)
+            break;
     }
     return events;
 }
@@ -72,8 +77,16 @@ export function rotateAuditLog(workingDirectory, teamName, maxSizeBytes = DEFAUL
     const rotated = lines.slice(keepFrom).join('\n') + '\n';
     // Atomic write: write to temp, then rename
     const tmpPath = logPath + '.tmp';
-    writeFileSync(tmpPath, rotated);
-    chmodSync(tmpPath, 0o600);
+    const logsDir = join(workingDirectory, '.omc', 'logs');
+    validateResolvedPath(tmpPath, logsDir);
+    // Prevent symlink attacks: if tmp path exists as symlink, remove it
+    if (existsSync(tmpPath)) {
+        const tmpStat = lstatSync(tmpPath);
+        if (tmpStat.isSymbolicLink()) {
+            unlinkSync(tmpPath);
+        }
+    }
+    writeFileSync(tmpPath, rotated, { encoding: 'utf-8', mode: 0o600 });
     renameSync(tmpPath, logPath);
 }
 //# sourceMappingURL=audit-log.js.map

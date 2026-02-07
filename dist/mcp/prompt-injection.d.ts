@@ -8,7 +8,7 @@
  * Valid agent roles that can be used with agent_role parameter.
  * Matches the agent prompt files in agents/*.md
  */
-export declare const VALID_AGENT_ROLES: readonly ["architect", "architect-medium", "architect-low", "analyst", "critic", "planner", "executor", "executor-high", "executor-low", "deep-executor", "designer", "designer-low", "designer-high", "explore", "explore-medium", "explore-high", "researcher", "researcher-low", "writer", "vision", "qa-tester", "qa-tester-high", "scientist", "scientist-low", "scientist-high", "security-reviewer", "security-reviewer-low", "build-fixer", "build-fixer-low", "tdd-guide", "tdd-guide-low", "code-reviewer", "code-reviewer-low", "git-master"];
+export declare const VALID_AGENT_ROLES: readonly ["architect", "architect-medium", "architect-low", "analyst", "critic", "planner", "executor", "executor-high", "executor-low", "deep-executor", "designer", "designer-low", "designer-high", "explore", "explore-high", "researcher", "writer", "vision", "qa-tester", "scientist", "scientist-high", "security-reviewer", "security-reviewer-low", "build-fixer", "tdd-guide", "tdd-guide-low", "code-reviewer", "git-master"];
 export type AgentRole = typeof VALID_AGENT_ROLES[number];
 /**
  * Resolve the system prompt from either explicit system_prompt or agent_role.

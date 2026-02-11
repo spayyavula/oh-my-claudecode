@@ -671,7 +671,7 @@ Suggested: use a working_directory within the project worktree, or set OMC_ALLOW
   // Type-guard both fields for defensive robustness against non-string values.
   const inlinePrompt = typeof args.prompt === 'string' ? args.prompt : undefined;
   const promptFileInput = typeof args.prompt_file === 'string' ? args.prompt_file : undefined;
-  const hasInlineIntent = inlinePrompt !== undefined && !promptFileInput?.trim();
+  const hasInlineIntent = inlinePrompt !== undefined && promptFileInput === undefined;
   const isInlineMode = hasInlineIntent && !!inlinePrompt.trim();
 
   // Reject empty/whitespace inline prompt with explicit error BEFORE any side effects
@@ -939,9 +939,14 @@ ${resolvedPrompt}`;
       `**Path Policy:** OMC_ALLOW_EXTERNAL_WORKDIR=${process.env.OMC_ALLOW_EXTERNAL_WORKDIR || '0 (enforced)'}`,
     ];
 
-    // In inline mode, include the actual response content in the MCP result
+    // In inline mode, return metadata + raw response as separate content blocks
     if (isInlineMode) {
-      responseLines.push('', '---', '', response);
+      return {
+        content: [
+          { type: 'text' as const, text: responseLines.join('\n') },
+          { type: 'text' as const, text: response },
+        ]
+      };
     }
 
     return {

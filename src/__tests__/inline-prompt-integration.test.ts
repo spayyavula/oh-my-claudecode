@@ -32,6 +32,43 @@ describe('Inline prompt integration - Codex', () => {
     expect(text).not.toContain('prompt_file is required');
   });
 
+  it('should not enter inline mode when prompt_file is whitespace', async () => {
+    const result = await handleAskCodex({
+      prompt: 'test prompt',
+      prompt_file: '   ',
+      agent_role: 'architect',
+      output_file: '/tmp/test-output.md',
+    });
+    // prompt_file is present (even whitespace), so file mode is used
+    // It should NOT auto-generate output or persist inline - it uses the provided prompt_file
+    expect(result.isError).toBe(true);
+    // File mode with whitespace prompt_file should fail at prompt_file validation
+    const text = result.content[0].text;
+    expect(text).toContain('Either');
+  });
+
+  it('should not enter inline mode when prompt_file is empty string', async () => {
+    const result = await handleAskCodex({
+      prompt: 'test prompt',
+      prompt_file: '',
+      agent_role: 'architect',
+      output_file: '/tmp/test-output.md',
+    });
+    expect(result.isError).toBe(true);
+    const text = result.content[0].text;
+    expect(text).toContain('Either');
+  });
+
+  it('should handle path traversal in inline prompt safely', async () => {
+    const result = await handleAskCodex({
+      prompt: '../../etc/passwd injection attempt',
+      agent_role: 'architect',
+    });
+    // Should not error about path traversal - slugify sanitizes the prompt
+    const text = result.content[0].text;
+    expect(text).not.toContain('E_PATH_OUTSIDE');
+  });
+
   it('should error when neither prompt nor prompt_file provided', async () => {
     const result = await handleAskCodex({
       agent_role: 'architect',
@@ -60,6 +97,30 @@ describe('Inline prompt integration - Gemini', () => {
     const text = result.content[0].text;
     expect(text).not.toContain('Either prompt (inline string) or prompt_file (path) is required.');
     expect(text).not.toContain('output_file is required');
+  });
+
+  it('should not enter inline mode when prompt_file is whitespace', async () => {
+    const result = await handleAskGemini({
+      prompt: 'test prompt',
+      prompt_file: '   ',
+      agent_role: 'designer',
+      output_file: '/tmp/test-output.md',
+    });
+    expect(result.isError).toBe(true);
+    const text = result.content[0].text;
+    expect(text).toContain('Either');
+  });
+
+  it('should not enter inline mode when prompt_file is empty string', async () => {
+    const result = await handleAskGemini({
+      prompt: 'test prompt',
+      prompt_file: '',
+      agent_role: 'designer',
+      output_file: '/tmp/test-output.md',
+    });
+    expect(result.isError).toBe(true);
+    const text = result.content[0].text;
+    expect(text).toContain('Either');
   });
 
   it('should error when neither prompt nor prompt_file provided', async () => {

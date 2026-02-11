@@ -23,7 +23,7 @@ const askGeminiTool = tool(
   `Send a prompt to Google Gemini CLI for design/implementation tasks. Gemini excels at frontend design review and implementation with its 1M token context window. Recommended roles: ${GEMINI_RECOMMENDED_ROLES.join(', ')}. Any valid OMC agent role is accepted. Fallback chain: ${GEMINI_MODEL_FALLBACKS.join(' → ')}. Requires Gemini CLI (npm install -g @google/gemini-cli).`,
   {
     agent_role: { type: "string", description: `Required. Agent perspective for Gemini. Recommended: ${GEMINI_RECOMMENDED_ROLES.join(', ')}. Any valid OMC agent role is accepted.` },
-    prompt: { type: "string", description: "Inline prompt string. Alternative to prompt_file -- the prompt is auto-persisted to a file for audit trail. When used, output_file is optional (auto-generated if omitted) and the response is returned inline in the MCP result." },
+    prompt: { type: "string", description: "Inline prompt string. Alternative to prompt_file -- the prompt is auto-persisted to a file for audit trail. When used, output_file is optional (auto-generated if omitted) and the response is returned inline in the MCP result. If both prompt and prompt_file are provided, prompt_file takes precedence." },
     prompt_file: { type: "string", description: "Path to file containing the prompt. Takes precedence over inline prompt if both provided." },
     output_file: { type: "string", description: "Required for file-based mode (prompt_file). Auto-generated in inline mode (prompt). Response content is returned inline only when using prompt parameter." },
     files: { type: "array", items: { type: "string" }, description: "File paths to include as context (contents will be prepended to prompt)" },

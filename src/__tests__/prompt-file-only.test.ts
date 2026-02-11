@@ -106,12 +106,16 @@ describe('inline prompt mode', () => {
         prompt: 'Analyze the architecture of this project',
         agent_role: 'architect',
       });
-      // May error at CLI execution, but must NOT error at parameter validation
+      // Must NOT error at parameter validation - any error must be from CLI execution
       const text = result.content[0].text;
       expect(text).not.toContain("Either 'prompt' (inline) or 'prompt_file' (file path) is required");
       expect(text).not.toContain('output_file is required');
       expect(text).not.toContain('Inline prompt is empty');
       expect(text).not.toContain('foreground only');
+      // Positive assertion: if there IS an error, it should be from CLI execution, not parameter validation
+      if (result.isError) {
+        expect(text).toMatch(/Codex CLI|spawn|ENOENT|command/i);
+      }
     });
 
     it('should return error for empty inline prompt with explicit message', async () => {
@@ -121,6 +125,17 @@ describe('inline prompt mode', () => {
       });
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain('Inline prompt is empty');
+    });
+
+    it('should not enter inline mode when prompt_file is whitespace (file mode precedence)', async () => {
+      const result = await handleAskCodex({
+        prompt: 'should not go inline',
+        prompt_file: '   ',
+        agent_role: 'architect',
+        output_file: '/tmp/test-output.md',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('Either');
     });
 
     it('should block inline prompt with background mode', async () => {
@@ -171,12 +186,27 @@ describe('inline prompt mode', () => {
         prompt: 'Review the UI design patterns',
         agent_role: 'designer',
       });
-      // May error at CLI execution, but must NOT error at parameter validation
+      // Must NOT error at parameter validation - any error must be from CLI execution
       const text = result.content[0].text;
       expect(text).not.toContain('Either prompt (inline string) or prompt_file (path) is required.');
       expect(text).not.toContain('output_file is required');
       expect(text).not.toContain('Inline prompt is empty');
       expect(text).not.toContain('foreground only');
+      // Positive assertion: if there IS an error, it should be from CLI execution, not parameter validation
+      if (result.isError) {
+        expect(text).toMatch(/Gemini CLI|spawn|ENOENT|command/i);
+      }
+    });
+
+    it('should not enter inline mode when prompt_file is whitespace (file mode precedence)', async () => {
+      const result = await handleAskGemini({
+        prompt: 'should not go inline',
+        prompt_file: '   ',
+        agent_role: 'designer',
+        output_file: '/tmp/test-output.md',
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('Either');
     });
 
     it('should require output_file when prompt_file is used (backward compat)', async () => {

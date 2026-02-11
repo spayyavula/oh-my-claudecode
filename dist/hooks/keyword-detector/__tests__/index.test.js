@@ -688,6 +688,34 @@ World`);
             expect(result).toContain('tdd');
             expect(result).toContain('research');
         });
+        // Team + Ralph composition tests
+        it('should return both ralph and team when both present (linked mode)', () => {
+            const result = getAllKeywords('team ralph build the API');
+            expect(result).toContain('ralph');
+            expect(result).toContain('team');
+        });
+        it('should return ralph before team in priority order', () => {
+            const result = getAllKeywords('team ralph build the API');
+            const ralphIdx = result.indexOf('ralph');
+            const teamIdx = result.indexOf('team');
+            expect(ralphIdx).toBeLessThan(teamIdx);
+        });
+        it('should return ralph as primary when team ralph is used', () => {
+            const primary = getPrimaryKeyword('team ralph build the API');
+            expect(primary?.type).toBe('ralph');
+        });
+        it('should return team and ralph with other keywords', () => {
+            const result = getAllKeywords('team ralph ask codex to review');
+            expect(result).toContain('ralph');
+            expect(result).toContain('team');
+            expect(result).toContain('codex');
+        });
+        it('should return team over autopilot even with ralph', () => {
+            const result = getAllKeywords('ralph team autopilot build');
+            expect(result).toContain('ralph');
+            expect(result).toContain('team');
+            expect(result).not.toContain('autopilot');
+        });
     });
 });
 //# sourceMappingURL=index.test.js.map

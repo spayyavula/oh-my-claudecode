@@ -7,7 +7,7 @@
  * Ported from oh-my-opencode's keyword-detector hook.
  */
 
-import { isEcomodeEnabled } from '../../features/auto-update.js';
+import { isEcomodeEnabled, isTeamEnabled } from '../../features/auto-update.js';
 
 export type KeywordType =
   | 'cancel'      // Priority 1
@@ -63,7 +63,7 @@ const KEYWORD_PATTERNS: Record<KeywordType, RegExp> = {
   cancel: /\b(cancelomc|stopomc)\b/i,
   ralph: /\b(ralph|don't stop|must complete|until done)\b/i,
   autopilot: /\b(autopilot|auto pilot|auto-pilot|autonomous|full auto|fullsend)\b/i,
-  team: /\b(team)\b|\bcoordinated\s+team\b|\b(ultrapilot|ultra-pilot)\b|\bparallel\s+build\b|\bswarm\s+build\b|\bswarm\s+\d+\s+agents?\b|\bcoordinated\s+agents\b/i,
+  team: /(?<!\b(?:my|the|our|a|his|her|their|its)\s)\bteam\b|\bcoordinated\s+team\b|\b(ultrapilot|ultra-pilot)\b|\bparallel\s+build\b|\bswarm\s+build\b|\bswarm\s+\d+\s+agents?\b|\bcoordinated\s+agents\b/i,
   ultrawork: /\b(ultrawork|ulw|uw)\b/i,
   ecomode: /\b(eco|ecomode|eco-mode|efficient|save-tokens|budget)\b/i,
   pipeline: /\b(pipeline)\b|\bchain\s+agents\b/i,
@@ -169,8 +169,18 @@ export function detectKeywordsWithType(
 
   // Check each keyword type
   for (const type of KEYWORD_PRIORITY) {
+    // Skip autopilot in loop - already detected above via explicit keyword/phrase checks
+    if (type === 'autopilot') {
+      continue;
+    }
+
     // Skip ecomode detection if disabled in config
     if (type === 'ecomode' && !isEcomodeEnabled()) {
+      continue;
+    }
+
+    // Skip team detection if disabled in config
+    if (type === 'team' && !isTeamEnabled()) {
       continue;
     }
 
@@ -218,6 +228,10 @@ export function getAllKeywords(text: string): KeywordType[] {
   if (types.includes('team') && types.includes('autopilot')) {
     types = types.filter(t => t !== 'autopilot');
   }
+
+  // Composition: team + ralph coexist (team-ralph linked mode)
+  // Both keywords are preserved so the skill can detect the composition.
+  // Ralph is primary (higher priority) but team is kept as secondary.
 
   // Sort by priority order
   return KEYWORD_PRIORITY.filter(k => types.includes(k));

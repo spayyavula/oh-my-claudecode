@@ -190,27 +190,6 @@ function isTeamEnabled() {
 }
 
 /**
- * Create a warning message for when team skill is invoked but feature is not enabled
- */
-function createTeamWarning() {
-  return `**TEAM FEATURE NOT ENABLED**
-
-The team skill requires the experimental agent teams feature to be enabled in Claude Code.
-
-To enable teams, add the following to your ~/.claude/settings.json:
-
-\`\`\`json
-{
-  "env": {
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
-  }
-}
-\`\`\`
-
-Then restart Claude Code. The team skill will proceed, but may not function correctly without this setting.`;
-}
-
-/**
  * Create a skill invocation message that tells Claude to use the Skill tool
  */
 function createSkillInvocation(skillName, originalPrompt, args = '') {

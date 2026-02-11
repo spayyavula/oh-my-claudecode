@@ -14,10 +14,14 @@ import {
 // Mock isEcomodeEnabled
 vi.mock('../../../features/auto-update.js', () => ({
   isEcomodeEnabled: vi.fn(() => true),
+  isTeamEnabled: vi.fn(() => true),
 }));
 
 import { isEcomodeEnabled } from '../../../features/auto-update.js';
 const mockedIsEcomodeEnabled = vi.mocked(isEcomodeEnabled);
+
+import { isTeamEnabled } from '../../../features/auto-update.js';
+const mockedIsTeamEnabled = vi.mocked(isTeamEnabled);
 
 describe('keyword-detector', () => {
   describe('removeCodeBlocks', () => {
@@ -916,6 +920,55 @@ World`);
       const result = getAllKeywords('cancelomc team');
       expect(result).toEqual(['cancel']);
       expect(result).not.toContain('team');
+    });
+
+    // Dedup regression test
+    it('should deduplicate repeated keyword triggers', () => {
+      const result = getAllKeywords('autopilot autopilot fix errors');
+      const autopilotCount = result.filter(k => k === 'autopilot').length;
+      expect(autopilotCount).toBe(1);
+    });
+
+    describe('when team is disabled via config', () => {
+      beforeEach(() => {
+        mockedIsTeamEnabled.mockReturnValue(false);
+      });
+
+      afterEach(() => {
+        mockedIsTeamEnabled.mockReturnValue(true);
+      });
+
+      it('should NOT detect team keyword when disabled', () => {
+        const result = getAllKeywords('team build the API');
+        expect(result).not.toContain('team');
+      });
+
+      it('should NOT detect coordinated team when disabled', () => {
+        const result = getAllKeywords('coordinated team build');
+        expect(result).not.toContain('team');
+      });
+
+      it('should NOT detect ultrapilot as team when disabled', () => {
+        const result = getAllKeywords('ultrapilot build all');
+        expect(result).not.toContain('team');
+      });
+
+      it('should NOT detect swarm as team when disabled', () => {
+        const result = getAllKeywords('swarm 5 agents fix errors');
+        expect(result).not.toContain('team');
+      });
+
+      it('should still detect other keywords when team disabled', () => {
+        const result = getAllKeywords('team ralph build the API');
+        expect(result).toContain('ralph');
+        expect(result).not.toContain('team');
+      });
+
+      it('should not suppress autopilot when team is disabled', () => {
+        const result = getAllKeywords('team autopilot build');
+        expect(result).toContain('autopilot');
+        expect(result).not.toContain('team');
+      });
     });
   });
 });

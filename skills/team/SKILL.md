@@ -187,17 +187,17 @@ Write OMC state using the `state_write` MCP tool for proper session-scoped persi
 ```
 state_write(mode="team", active=true, current_phase="team-plan", state={
   "team_name": "fix-ts-errors",
-  "agent_count": "3",
+  "agent_count": 3,
   "agent_types": "executor",
   "task": "fix all TypeScript errors",
-  "fix_loop_count": "0",
-  "max_fix_loops": "3",
-  "linked_ralph": "false",
+  "fix_loop_count": 0,
+  "max_fix_loops": 3,
+  "linked_ralph": false,
   "stage_history": "team-plan"
-  // Note: state_write accepts string values; consumers should coerce
-  // agent_count, fix_loop_count, max_fix_loops to numbers on read
 })
 ```
+
+> **Note:** The MCP `state_write` tool transports all values as strings. Consumers must coerce `agent_count`, `fix_loop_count`, `max_fix_loops` to numbers and `linked_ralph` to boolean when reading state.
 
 **State schema fields:**
 
@@ -349,7 +349,7 @@ state_write(mode="team", current_phase="team-verify")
 
 // Entering team-fix after verify failure
 state_write(mode="team", current_phase="team-fix", state={
-  "fix_loop_count": "1"
+  "fix_loop_count": 1
 })
 ```
 
@@ -679,13 +679,13 @@ Both modes write their own state files with cross-references:
 // Team state (via state_write)
 state_write(mode="team", active=true, current_phase="team-plan", state={
   "team_name": "build-rest-api",
-  "linked_ralph": "true",
+  "linked_ralph": true,
   "task": "build a complete REST API"
 })
 
 // Ralph state (via state_write)
 state_write(mode="ralph", active=true, iteration=1, max_iterations=10, current_phase="execution", state={
-  "linked_team": "true",
+  "linked_team": true,
   "team_name": "build-rest-api"
 })
 ```

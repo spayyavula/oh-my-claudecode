@@ -326,42 +326,19 @@ function createHookOutput(additionalContext) {
 function isTeamEnabled() {
   try {
     const settingsPath = join(homedir(), '.claude', 'settings.json');
-    if (!existsSync(settingsPath)) {
-      return false;
+    if (existsSync(settingsPath)) {
+      const settings = JSON.parse(readFileSync(settingsPath, 'utf-8'));
+      if (settings.env?.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS === '1' ||
+          settings.env?.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS === 'true') {
+        return true;
+      }
     }
-    const content = readFileSync(settingsPath, 'utf-8');
-    const settings = JSON.parse(content);
-    const envValue = settings?.env?.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS;
-    if (typeof envValue === 'string') {
-      const normalized = envValue.toLowerCase().trim();
-      return normalized === '1' || normalized === 'true' || normalized === 'yes';
+    if (process.env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS === '1' ||
+        process.env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS === 'true') {
+      return true;
     }
     return false;
-  } catch {
-    // Best effort: if we can't read settings, assume disabled
-    return false;
-  }
-}
-
-/**
- * Create a warning message for when team skill is invoked but feature is not enabled
- */
-function createTeamWarning() {
-  return `⚠️ **TEAM FEATURE NOT ENABLED**
-
-The team skill requires the experimental agent teams feature to be enabled in Claude Code.
-
-To enable teams, add the following to your ~/.claude/settings.json:
-
-\`\`\`json
-{
-  "env": {
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
-  }
-}
-\`\`\`
-
-Then restart Claude Code. The team skill will proceed, but may not function correctly without this setting.`;
+  } catch { return false; }
 }
 
 // Main

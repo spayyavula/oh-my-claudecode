@@ -7,7 +7,7 @@
  * Ported from oh-my-opencode's keyword-detector hook.
  */
 
-import { isEcomodeEnabled } from '../../features/auto-update.js';
+import { isEcomodeEnabled, isTeamEnabled } from '../../features/auto-update.js';
 
 export type KeywordType =
   | 'cancel'      // Priority 1
@@ -169,8 +169,18 @@ export function detectKeywordsWithType(
 
   // Check each keyword type
   for (const type of KEYWORD_PRIORITY) {
+    // Skip autopilot in loop - already detected above via explicit keyword/phrase checks
+    if (type === 'autopilot') {
+      continue;
+    }
+
     // Skip ecomode detection if disabled in config
     if (type === 'ecomode' && !isEcomodeEnabled()) {
+      continue;
+    }
+
+    // Skip team detection if disabled in config
+    if (type === 'team' && !isTeamEnabled()) {
       continue;
     }
 

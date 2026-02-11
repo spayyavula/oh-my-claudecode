@@ -183,6 +183,15 @@ export function isEcomodeEnabled(): boolean {
 }
 
 /**
+ * Check if team feature is enabled
+ * Returns false by default - requires explicit opt-in via env var
+ */
+export function isTeamEnabled(): boolean {
+  const envVal = process.env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS;
+  return envVal === '1' || envVal === 'true';
+}
+
+/**
  * Version metadata stored after installation
  */
 export interface VersionMetadata {

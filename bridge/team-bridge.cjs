@@ -1044,6 +1044,12 @@ async function runBridge(config) {
   let activeChild = null;
   log(`[bridge] ${workerName}@${teamName} starting (${provider})`);
   audit(config, "bridge_start");
+  try {
+    writeHeartbeat(workingDirectory, buildHeartbeat(config, "polling", null, 0));
+  } catch (err) {
+    audit(config, "bridge_start", void 0, { warning: "startup_write_failed", error: String(err) });
+  }
+  let readyEmitted = false;
   while (true) {
     try {
       const shutdown = checkShutdownSignal(teamName, workerName);
@@ -1080,6 +1086,18 @@ async function runBridge(config) {
         continue;
       }
       writeHeartbeat(workingDirectory, buildHeartbeat(config, "polling", null, consecutiveErrors));
+      if (!readyEmitted) {
+        try {
+          appendOutbox(teamName, workerName, {
+            type: "ready",
+            message: `Worker ${workerName} is ready (${provider})`,
+            timestamp: (/* @__PURE__ */ new Date()).toISOString()
+          });
+          readyEmitted = true;
+        } catch (err) {
+          audit(config, "bridge_start", void 0, { warning: "startup_write_failed", error: String(err) });
+        }
+      }
       const messages = readNewInboxMessages(teamName, workerName);
       const task = await findNextTask(teamName, workerName);
       if (task) {
@@ -1277,7 +1295,8 @@ function validateConfigPath(configPath2, homeDir, claudeConfigDir) {
   const isUnderHome = resolved.startsWith(homeDir + "/") || resolved === homeDir;
   const normalizedConfigDir = (0, import_path9.resolve)(claudeConfigDir);
   const normalizedOmcDir = (0, import_path9.resolve)(homeDir, ".omc");
-  const isTrustedSubpath = resolved === normalizedConfigDir || resolved.startsWith(normalizedConfigDir + "/") || resolved === normalizedOmcDir || resolved.startsWith(normalizedOmcDir + "/");
+  const hasOmcComponent = resolved.includes("/.omc/") || resolved.endsWith("/.omc");
+  const isTrustedSubpath = resolved === normalizedConfigDir || resolved.startsWith(normalizedConfigDir + "/") || resolved === normalizedOmcDir || resolved.startsWith(normalizedOmcDir + "/") || hasOmcComponent;
   if (!isUnderHome || !isTrustedSubpath) return false;
   try {
     const parentDir = (0, import_path9.resolve)(resolved, "..");

@@ -28,11 +28,13 @@ export function validateConfigPath(configPath: string, homeDir: string, claudeCo
   const isUnderHome = resolved.startsWith(homeDir + '/') || resolved === homeDir;
   const normalizedConfigDir = resolve(claudeConfigDir);
   const normalizedOmcDir = resolve(homeDir, '.omc');
+  const hasOmcComponent = resolved.includes('/.omc/') || resolved.endsWith('/.omc');
   const isTrustedSubpath =
     resolved === normalizedConfigDir ||
     resolved.startsWith(normalizedConfigDir + '/') ||
     resolved === normalizedOmcDir ||
-    resolved.startsWith(normalizedOmcDir + '/');
+    resolved.startsWith(normalizedOmcDir + '/') ||
+    hasOmcComponent;
   if (!isUnderHome || !isTrustedSubpath) return false;
 
   // Additionally verify via realpathSync on the parent directory (if it exists)

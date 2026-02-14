@@ -1,5 +1,0 @@
-{"timestamp":"2026-02-13T23:40:59.858Z","type":"watcher_start","cwd":"/home/bellman/Workspace/oh-my-claudecode-dev","notify_script":"/home/bellman/Workspace/oh-my-codex/scripts/notify-hook.js","poll_ms":700,"once":false}
-{"timestamp":"2026-02-13T23:51:06.916Z","type":"watcher_start","cwd":"/home/bellman/Workspace/oh-my-claudecode-dev","notify_script":"/home/bellman/Workspace/oh-my-codex/scripts/notify-hook.js","poll_ms":700,"once":true}
-{"timestamp":"2026-02-13T23:51:06.978Z","type":"watcher_once_complete","seen_turns":0}
-{"timestamp":"2026-02-13T23:51:06.993Z","type":"watcher_stop","signal":"SIGTERM"}
-{"timestamp":"2026-02-13T23:54:14.971Z","type":"watcher_start","cwd":"/home/bellman/Workspace/oh-my-claudecode-dev","notify_script":"/home/bellman/Workspace/oh-my-codex/scripts/notify-hook.js","poll_ms":700,"once":false}

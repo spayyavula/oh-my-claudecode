@@ -1,9 +1,0 @@
-{
-  "pid": 2371324,
-  "started_at": "2026-02-13T23:54:14.971Z",
-  "cwd": "/home/bellman/Workspace/oh-my-claudecode-dev",
-  "notify_script": "/home/bellman/Workspace/oh-my-codex/scripts/notify-hook.js",
-  "poll_ms": 700,
-  "tracked_files": 1,
-  "seen_turns": 0
-}

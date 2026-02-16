@@ -508,6 +508,10 @@ async function processPersistentMode(input: HookInput): Promise<HookOutput> {
           }).catch(() => {})
         ).catch(() => {});
       }
+
+      // IMPORTANT: Do NOT clean up reply-listener/session-registry on Stop hooks.
+      // Stop can fire for normal "idle" turns while the session is still active.
+      // Reply cleanup is handled in the true SessionEnd hook only.
     }
     return output;
   }
@@ -562,6 +566,27 @@ async function processSessionStart(input: HookInput): Promise<HookOutput> {
         projectPath: directory,
       }).catch(() => {})
     ).catch(() => {});
+  }
+
+  // Start reply listener daemon if configured (non-blocking, swallows errors)
+  if (sessionId) {
+    Promise.all([
+      import("../notifications/reply-listener.js"),
+      import("../notifications/config.js"),
+    ]).then(
+      ([
+        { startReplyListener },
+        { getReplyConfig, getNotificationConfig, getReplyListenerPlatformConfig },
+      ]) => {
+      const replyConfig = getReplyConfig();
+      if (!replyConfig) return;
+      const notifConfig = getNotificationConfig();
+      const platformConfig = getReplyListenerPlatformConfig(notifConfig);
+      startReplyListener({
+        ...replyConfig,
+        ...platformConfig,
+      });
+    }).catch(() => {});
   }
 
   const messages: string[] = [];

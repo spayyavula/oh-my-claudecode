@@ -93,6 +93,9 @@ export interface TranscriptData {
     lastActivatedSkill?: SkillInvocation;
     pendingPermission?: PendingPermission;
     thinkingState?: ThinkingState;
+    toolCallCount: number;
+    agentCallCount: number;
+    skillCallCount: number;
 }
 export interface RalphStateForHud {
     active: boolean;
@@ -167,6 +170,12 @@ export interface HudRenderContext {
     omcVersion: string | null;
     /** Latest available version from npm registry (null if up to date or unknown) */
     updateAvailable: string | null;
+    /** Total tool_use blocks seen in transcript */
+    toolCallCount: number;
+    /** Total Task/proxy_Task calls seen in transcript */
+    agentCallCount: number;
+    /** Total Skill/proxy_Skill calls seen in transcript */
+    skillCallCount: number;
 }
 export type HudPreset = 'minimal' | 'focused' | 'full' | 'opencode' | 'dense' | 'analytics';
 /**
@@ -234,6 +243,7 @@ export interface HudElementConfig {
     useBars: boolean;
     showCache: boolean;
     showCost: boolean;
+    showCallCounts?: boolean;
     maxOutputLines: number;
     safeMode: boolean;
 }

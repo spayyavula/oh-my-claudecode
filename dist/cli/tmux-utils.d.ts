@@ -13,6 +13,10 @@ export interface TmuxPaneSnapshot {
  */
 export declare function isTmuxAvailable(): boolean;
 /**
+ * Check if claude CLI is available on the system
+ */
+export declare function isClaudeAvailable(): boolean;
+/**
  * Resolve launch policy based on environment
  * - inside-tmux: Already in tmux session, split pane for HUD
  * - outside-tmux: Not in tmux, create new session

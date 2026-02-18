@@ -12,6 +12,7 @@ import {
   listHudWatchPaneIdsInCurrentWindow,
   createHudWatchPane,
   killTmuxPane,
+  isClaudeAvailable,
   type ClaudeLaunchPolicy,
 } from './tmux-utils.js';
 
@@ -122,8 +123,13 @@ function runClaudeInsideTmux(cwd: string, args: string[], hudCmd: string): void 
   // Launch Claude in current pane
   try {
     execFileSync('claude', args, { cwd, stdio: 'inherit' });
-  } catch {
-    // Claude exited
+  } catch (error) {
+    const err = error as NodeJS.ErrnoException;
+    if (err.code === 'ENOENT') {
+      console.error('[omc] Error: claude CLI not found in PATH.');
+      process.exit(1);
+    }
+    // Normal exit (non-zero status codes throw in execFileSync) — ignore
   } finally {
     // Cleanup HUD pane on exit
     if (hudPaneId) {
@@ -179,8 +185,13 @@ function runClaudeOutsideTmux(cwd: string, args: string[], sessionId: string, hu
 function runClaudeDirect(cwd: string, args: string[]): void {
   try {
     execFileSync('claude', args, { cwd, stdio: 'inherit' });
-  } catch {
-    // Claude exited
+  } catch (error) {
+    const err = error as NodeJS.ErrnoException;
+    if (err.code === 'ENOENT') {
+      console.error('[omc] Error: claude CLI not found in PATH.');
+      process.exit(1);
+    }
+    // Normal exit (non-zero status codes throw in execFileSync) — ignore
   }
 }
 
@@ -202,6 +213,20 @@ export async function postLaunch(_cwd: string, _sessionId: string): Promise<void
  */
 export async function launchCommand(args: string[]): Promise<void> {
   const cwd = process.cwd();
+
+  // Pre-flight: check for nested session
+  if (process.env.CLAUDECODE) {
+    console.error('[omc] Error: Already inside a Claude Code session. Nested launches are not supported.');
+    process.exit(1);
+  }
+
+  // Pre-flight: check claude CLI availability
+  if (!isClaudeAvailable()) {
+    console.error('[omc] Error: claude CLI not found. Install Claude Code first:');
+    console.error('  npm install -g @anthropic-ai/claude-code');
+    process.exit(1);
+  }
+
   const normalizedArgs = normalizeClaudeLaunchArgs(args);
   const sessionId = `omc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 

@@ -17,6 +17,14 @@ import {
   SharedTask,
   SharedMessage,
 } from './shared-state.js';
+import {
+  listOmxTeams,
+  readOmxTeamConfig,
+  listOmxMailboxMessages,
+  sendOmxDirectMessage,
+  broadcastOmxMessage,
+  listOmxTasks,
+} from './omx-team-state.js';
 
 // ============================================================================
 // interop_send_task - Send a task to the other tool
@@ -323,6 +331,275 @@ export const interopReadMessagesTool: ToolDefinition<{
   }
 };
 
+// ============================================================================
+// interop_list_omx_teams - List active omx teams
+// ============================================================================
+
+export const interopListOmxTeamsTool: ToolDefinition<{
+  workingDirectory: z.ZodOptional<z.ZodString>;
+}> = {
+  name: 'interop_list_omx_teams',
+  description: 'List active OMX (oh-my-codex) teams from .omx/state/team/. Shows team names and basic configuration.',
+  schema: {
+    workingDirectory: z.string().optional().describe('Working directory (defaults to cwd)'),
+  },
+  handler: async (args) => {
+    try {
+      const cwd = args.workingDirectory || process.cwd();
+      const teamNames = await listOmxTeams(cwd);
+
+      if (teamNames.length === 0) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: '## No OMX Teams Found\n\nNo active OMX teams detected in .omx/state/team/.'
+          }]
+        };
+      }
+
+      const lines: string[] = [`## OMX Teams (${teamNames.length})\n`];
+
+      for (const name of teamNames) {
+        const config = await readOmxTeamConfig(name, cwd);
+        if (config) {
+          lines.push(`### ${name}`);
+          lines.push(`- **Task:** ${config.task}`);
+          lines.push(`- **Workers:** ${config.worker_count} (${config.agent_type})`);
+          lines.push(`- **Created:** ${config.created_at}`);
+          lines.push(`- **Workers:** ${config.workers.map((w) => w.name).join(', ')}`);
+          lines.push('');
+        } else {
+          lines.push(`### ${name} (config not readable)\n`);
+        }
+      }
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: lines.join('\n')
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Error listing OMX teams: ${error instanceof Error ? error.message : String(error)}`
+        }],
+        isError: true
+      };
+    }
+  }
+};
+
+// ============================================================================
+// interop_send_omx_message - Send message to omx team mailbox
+// ============================================================================
+
+export const interopSendOmxMessageTool: ToolDefinition<{
+  teamName: z.ZodString;
+  fromWorker: z.ZodString;
+  toWorker: z.ZodString;
+  body: z.ZodString;
+  broadcast: z.ZodOptional<z.ZodBoolean>;
+  workingDirectory: z.ZodOptional<z.ZodString>;
+}> = {
+  name: 'interop_send_omx_message',
+  description: 'Send a message to an OMX team worker mailbox using the native omx format. Supports direct messages and broadcasts.',
+  schema: {
+    teamName: z.string().describe('OMX team name'),
+    fromWorker: z.string().describe('Sender worker name (e.g., "omc-bridge")'),
+    toWorker: z.string().describe('Target worker name (ignored if broadcast=true)'),
+    body: z.string().describe('Message body'),
+    broadcast: z.boolean().optional().describe('Broadcast to all workers (default: false)'),
+    workingDirectory: z.string().optional().describe('Working directory (defaults to cwd)'),
+  },
+  handler: async (args) => {
+    try {
+      const cwd = args.workingDirectory || process.cwd();
+
+      if (args.broadcast) {
+        const messages = await broadcastOmxMessage(args.teamName, args.fromWorker, args.body, cwd);
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `## Broadcast Sent to OMX Team: ${args.teamName}\n\n` +
+              `**From:** ${args.fromWorker}\n` +
+              `**Recipients:** ${messages.length}\n` +
+              `**Message IDs:** ${messages.map((m) => m.message_id).join(', ')}\n\n` +
+              `Message delivered to ${messages.length} worker mailbox(es).`
+          }]
+        };
+      }
+
+      const msg = await sendOmxDirectMessage(args.teamName, args.fromWorker, args.toWorker, args.body, cwd);
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `## Message Sent to OMX Worker\n\n` +
+            `**Team:** ${args.teamName}\n` +
+            `**From:** ${msg.from_worker}\n` +
+            `**To:** ${msg.to_worker}\n` +
+            `**Message ID:** ${msg.message_id}\n` +
+            `**Created:** ${msg.created_at}\n\n` +
+            `Message delivered to ${msg.to_worker}'s mailbox.`
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Error sending OMX message: ${error instanceof Error ? error.message : String(error)}`
+        }],
+        isError: true
+      };
+    }
+  }
+};
+
+// ============================================================================
+// interop_read_omx_messages - Read messages from omx team mailbox
+// ============================================================================
+
+export const interopReadOmxMessagesTool: ToolDefinition<{
+  teamName: z.ZodString;
+  workerName: z.ZodString;
+  limit: z.ZodOptional<z.ZodNumber>;
+  workingDirectory: z.ZodOptional<z.ZodString>;
+}> = {
+  name: 'interop_read_omx_messages',
+  description: 'Read messages from an OMX team worker mailbox.',
+  schema: {
+    teamName: z.string().describe('OMX team name'),
+    workerName: z.string().describe('Worker name whose mailbox to read'),
+    limit: z.number().optional().describe('Maximum number of messages to return (default: 20)'),
+    workingDirectory: z.string().optional().describe('Working directory (defaults to cwd)'),
+  },
+  handler: async (args) => {
+    try {
+      const cwd = args.workingDirectory || process.cwd();
+      const limit = args.limit ?? 20;
+      const messages = await listOmxMailboxMessages(args.teamName, args.workerName, cwd);
+
+      if (messages.length === 0) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `## No Messages\n\nNo messages in ${args.workerName}'s mailbox for team ${args.teamName}.`
+          }]
+        };
+      }
+
+      const limited = messages.slice(-limit); // most recent N messages
+      const lines: string[] = [
+        `## OMX Mailbox: ${args.workerName} @ ${args.teamName} (${limited.length}${messages.length > limit ? ` of ${messages.length}` : ''})\n`
+      ];
+
+      for (const msg of limited) {
+        const deliveredIcon = msg.delivered_at ? '✓' : '○';
+        lines.push(`### ${deliveredIcon} ${msg.message_id}`);
+        lines.push(`- **From:** ${msg.from_worker}`);
+        lines.push(`- **To:** ${msg.to_worker}`);
+        lines.push(`- **Body:** ${msg.body.slice(0, 300)}${msg.body.length > 300 ? '...' : ''}`);
+        lines.push(`- **Created:** ${msg.created_at}`);
+        if (msg.delivered_at) lines.push(`- **Delivered:** ${msg.delivered_at}`);
+        lines.push('');
+      }
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: lines.join('\n')
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Error reading OMX messages: ${error instanceof Error ? error.message : String(error)}`
+        }],
+        isError: true
+      };
+    }
+  }
+};
+
+// ============================================================================
+// interop_read_omx_tasks - Read omx team tasks
+// ============================================================================
+
+export const interopReadOmxTasksTool: ToolDefinition<{
+  teamName: z.ZodString;
+  status: z.ZodOptional<z.ZodEnum<['pending', 'blocked', 'in_progress', 'completed', 'failed']>>;
+  limit: z.ZodOptional<z.ZodNumber>;
+  workingDirectory: z.ZodOptional<z.ZodString>;
+}> = {
+  name: 'interop_read_omx_tasks',
+  description: 'Read tasks from an OMX team. Can filter by status.',
+  schema: {
+    teamName: z.string().describe('OMX team name'),
+    status: z.enum(['pending', 'blocked', 'in_progress', 'completed', 'failed']).optional().describe('Filter by task status'),
+    limit: z.number().optional().describe('Maximum number of tasks to return (default: 20)'),
+    workingDirectory: z.string().optional().describe('Working directory (defaults to cwd)'),
+  },
+  handler: async (args) => {
+    try {
+      const cwd = args.workingDirectory || process.cwd();
+      const limit = args.limit ?? 20;
+      let tasks = await listOmxTasks(args.teamName, cwd);
+
+      if (args.status) {
+        tasks = tasks.filter((t) => t.status === args.status);
+      }
+
+      if (tasks.length === 0) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `## No Tasks\n\nNo tasks found for OMX team ${args.teamName}${args.status ? ` with status "${args.status}"` : ''}.`
+          }]
+        };
+      }
+
+      const limited = tasks.slice(0, limit);
+      const lines: string[] = [
+        `## OMX Tasks: ${args.teamName} (${limited.length}${tasks.length > limit ? ` of ${tasks.length}` : ''})\n`
+      ];
+
+      for (const task of limited) {
+        const statusIcon = task.status === 'completed' ? '✓' :
+                          task.status === 'failed' ? '✗' :
+                          task.status === 'in_progress' ? '⋯' :
+                          task.status === 'blocked' ? '⊘' : '○';
+
+        lines.push(`### ${statusIcon} Task ${task.id}: ${task.subject}`);
+        lines.push(`- **Status:** ${task.status}`);
+        if (task.owner) lines.push(`- **Owner:** ${task.owner}`);
+        lines.push(`- **Description:** ${task.description.slice(0, 200)}${task.description.length > 200 ? '...' : ''}`);
+        lines.push(`- **Created:** ${task.created_at}`);
+        if (task.result) lines.push(`- **Result:** ${task.result.slice(0, 200)}${task.result.length > 200 ? '...' : ''}`);
+        if (task.error) lines.push(`- **Error:** ${task.error}`);
+        if (task.completed_at) lines.push(`- **Completed:** ${task.completed_at}`);
+        lines.push('');
+      }
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: lines.join('\n')
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `Error reading OMX tasks: ${error instanceof Error ? error.message : String(error)}`
+        }],
+        isError: true
+      };
+    }
+  }
+};
+
 /**
  * Get all interop MCP tools for registration
  */
@@ -332,5 +609,9 @@ export function getInteropTools(): ToolDefinition<any>[] {
     interopReadResultsTool,
     interopSendMessageTool,
     interopReadMessagesTool,
+    interopListOmxTeamsTool,
+    interopSendOmxMessageTool,
+    interopReadOmxMessagesTool,
+    interopReadOmxTasksTool,
   ];
 }

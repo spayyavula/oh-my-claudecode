@@ -33,6 +33,29 @@ export declare const interopReadMessagesTool: ToolDefinition<{
     markAsRead: z.ZodOptional<z.ZodBoolean>;
     workingDirectory: z.ZodOptional<z.ZodString>;
 }>;
+export declare const interopListOmxTeamsTool: ToolDefinition<{
+    workingDirectory: z.ZodOptional<z.ZodString>;
+}>;
+export declare const interopSendOmxMessageTool: ToolDefinition<{
+    teamName: z.ZodString;
+    fromWorker: z.ZodString;
+    toWorker: z.ZodString;
+    body: z.ZodString;
+    broadcast: z.ZodOptional<z.ZodBoolean>;
+    workingDirectory: z.ZodOptional<z.ZodString>;
+}>;
+export declare const interopReadOmxMessagesTool: ToolDefinition<{
+    teamName: z.ZodString;
+    workerName: z.ZodString;
+    limit: z.ZodOptional<z.ZodNumber>;
+    workingDirectory: z.ZodOptional<z.ZodString>;
+}>;
+export declare const interopReadOmxTasksTool: ToolDefinition<{
+    teamName: z.ZodString;
+    status: z.ZodOptional<z.ZodEnum<['pending', 'blocked', 'in_progress', 'completed', 'failed']>>;
+    limit: z.ZodOptional<z.ZodNumber>;
+    workingDirectory: z.ZodOptional<z.ZodString>;
+}>;
 /**
  * Get all interop MCP tools for registration
  */

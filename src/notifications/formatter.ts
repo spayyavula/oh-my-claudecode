@@ -158,10 +158,6 @@ export function formatSessionIdle(payload: NotificationPayload): string {
     lines.push(`**Modes:** ${payload.modesUsed.join(", ")}`);
   }
 
-  if (payload.contextSummary) {
-    lines.push("", `**Summary:** ${payload.contextSummary}`);
-  }
-
   lines.push("");
   lines.push(buildFooter(payload, true));
 

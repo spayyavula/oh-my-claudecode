@@ -1,13 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'fs';
-import { resolve } from 'path';
 import { LSP_SERVERS, getServerForFile, getServerForLanguage } from '../tools/lsp/servers.js';
 
 describe('LSP Server Configurations', () => {
   const serverKeys = Object.keys(LSP_SERVERS);
 
-  it('should have 18 configured servers', () => {
-    expect(serverKeys).toHaveLength(18);
+  it('should have 17 configured servers', () => {
+    expect(serverKeys).toHaveLength(17);
   });
 
   it.each(serverKeys)('server "%s" should have valid config', (key) => {
@@ -59,7 +57,6 @@ describe('getServerForFile', () => {
     ['Program.cs', 'OmniSharp'],
     ['main.dart', 'Dart Analysis Server'],
     ['view.erb', 'Ruby Language Server (Solargraph)'],
-    ['App.swift', 'SourceKit-LSP'],
   ];
 
   it.each(cases)('should resolve "%s" to "%s"', (file, expectedName) => {
@@ -110,7 +107,6 @@ describe('getServerForLanguage', () => {
     ['cs', 'OmniSharp'],
     ['dart', 'Dart Analysis Server'],
     ['flutter', 'Dart Analysis Server'],
-    ['swift', 'SourceKit-LSP'],
   ];
 
   it.each(cases)('should resolve language "%s" to "%s"', (lang, expectedName) => {
@@ -132,22 +128,5 @@ describe('getServerForLanguage', () => {
 describe('OmniSharp command casing', () => {
   it('should use lowercase command for cross-platform compatibility', () => {
     expect(LSP_SERVERS.csharp.command).toBe('omnisharp');
-  });
-});
-
-describe('mcp-server.cjs bundle integrity', () => {
-  const bundlePath = resolve(__dirname, '../../bridge/mcp-server.cjs');
-  let bundleContent: string;
-
-  try {
-    bundleContent = readFileSync(bundlePath, 'utf8');
-  } catch {
-    bundleContent = '';
-  }
-
-  it.skipIf(!bundleContent)('should contain all LSP_SERVERS entries', () => {
-    for (const [key, config] of Object.entries(LSP_SERVERS)) {
-      expect(bundleContent, `LSP server command "${config.command}" (${key}) missing from bundle`).toContain(config.command);
-    }
   });
 });

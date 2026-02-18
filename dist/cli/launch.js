@@ -3,7 +3,7 @@
  * Launches Claude Code with tmux session management and HUD integration
  */
 import { execFileSync } from 'child_process';
-import { resolveLaunchPolicy, buildTmuxSessionName, buildTmuxShellCommand, listHudWatchPaneIdsInCurrentWindow, createHudWatchPane, killTmuxPane, } from './tmux-utils.js';
+import { resolveLaunchPolicy, buildTmuxSessionName, buildTmuxShellCommand, listHudWatchPaneIdsInCurrentWindow, createHudWatchPane, killTmuxPane, isClaudeAvailable, } from './tmux-utils.js';
 // Flag mapping
 const MADMAX_FLAG = '--madmax';
 const YOLO_FLAG = '--yolo';
@@ -99,8 +99,13 @@ function runClaudeInsideTmux(cwd, args, hudCmd) {
     try {
         execFileSync('claude', args, { cwd, stdio: 'inherit' });
     }
-    catch {
-        // Claude exited
+    catch (error) {
+        const err = error;
+        if (err.code === 'ENOENT') {
+            console.error('[omc] Error: claude CLI not found in PATH.');
+            process.exit(1);
+        }
+        // Normal exit (non-zero status codes throw in execFileSync) — ignore
     }
     finally {
         // Cleanup HUD pane on exit
@@ -148,8 +153,13 @@ function runClaudeDirect(cwd, args) {
     try {
         execFileSync('claude', args, { cwd, stdio: 'inherit' });
     }
-    catch {
-        // Claude exited
+    catch (error) {
+        const err = error;
+        if (err.code === 'ENOENT') {
+            console.error('[omc] Error: claude CLI not found in PATH.');
+            process.exit(1);
+        }
+        // Normal exit (non-zero status codes throw in execFileSync) — ignore
     }
 }
 /**
@@ -169,6 +179,17 @@ export async function postLaunch(_cwd, _sessionId) {
  */
 export async function launchCommand(args) {
     const cwd = process.cwd();
+    // Pre-flight: check for nested session
+    if (process.env.CLAUDECODE) {
+        console.error('[omc] Error: Already inside a Claude Code session. Nested launches are not supported.');
+        process.exit(1);
+    }
+    // Pre-flight: check claude CLI availability
+    if (!isClaudeAvailable()) {
+        console.error('[omc] Error: claude CLI not found. Install Claude Code first:');
+        console.error('  npm install -g @anthropic-ai/claude-code');
+        process.exit(1);
+    }
     const normalizedArgs = normalizeClaudeLaunchArgs(args);
     const sessionId = `omc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     // Phase 1: preLaunch

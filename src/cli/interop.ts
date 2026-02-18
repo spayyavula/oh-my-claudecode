@@ -7,7 +7,7 @@
 
 import { execFileSync } from 'child_process';
 import { randomUUID } from 'crypto';
-import { isTmuxAvailable } from './tmux-utils.js';
+import { isTmuxAvailable, isClaudeAvailable } from './tmux-utils.js';
 import { initInteropSession } from '../interop/shared-state.js';
 
 /**
@@ -16,18 +16,6 @@ import { initInteropSession } from '../interop/shared-state.js';
 function isCodexAvailable(): boolean {
   try {
     execFileSync('codex', ['--version'], { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Check if claude CLI is available
- */
-function isClaudeAvailable(): boolean {
-  try {
-    execFileSync('claude', ['--version'], { stdio: 'ignore' });
     return true;
   } catch {
     return false;

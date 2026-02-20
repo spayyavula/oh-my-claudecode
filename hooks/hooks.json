@@ -65,6 +65,16 @@
             "timeout": 3
           }
         ]
+      },
+      {
+        "matcher": "TeamCreate|ExitPlanMode",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/context-safety.mjs\"",
+            "timeout": 3
+          }
+        ]
       }
     ],
     "PermissionRequest": [
@@ -141,6 +151,11 @@
       {
         "matcher": "*",
         "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/context-guard-stop.mjs\"",
+            "timeout": 5
+          },
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/persistent-mode.cjs\"",
